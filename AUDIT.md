@@ -112,6 +112,27 @@
 - Linux 内核默认阻止 macvlan 容器直接与其父接口宿主通信；宿主机 ping 不通容器是预期隔离；
 - 不应为了宿主可达性自动创建 host-side macvlan shim，因为这会改变宿主网络。
 
+### 混杂模式与宿主物理接口
+
+不需要在宿主机上手动或永久执行 `ip link set <parent> promisc on`。但“无需手动开启”不表示运行期间物理接口一定没有 `PROMISC` 标志，需要区分外部网络要求和 Linux 内核的动态行为。
+
+外部二层网络方面，Docker 文档所说网络设备需要处理 macvlan 的“promiscuous mode”，核心要求是同一物理链路后能够学习和转发多个 MAC。普通物理交换机一般会自然学习；启用了端口安全的受管交换机、虚拟交换机和云网络可能拒绝额外源 MAC 或不把目标为容器 MAC 的帧送回该端口。当前实机已经成功完成手机发现和 PS5 加速，因此这套网卡、交换机和 AP 已满足该要求。
+
+宿主 Linux 方面，当前配置有两层动作：
+
+1. Docker 以 `macvlan_mode: bridge` 在物理父接口上创建具有独立 MAC 的容器接口。标准 macvlan 打开路径会先尝试二层转发卸载，否则通过 `dev_uc_add()` 把这个额外单播地址加入父接口；仅创建 macvlan 本身不等于无条件要求管理员预先开启混杂模式。
+2. 容器入口脚本随后创建默认 `vlan_filtering=0` 的 Linux bridge `br-lan`，并把 macvlan 接口 `eth0` 加入该 bridge。Linux 6.12 的 bridge 代码会自动把这种 bridge 的端口置为混杂模式；macvlan 的 `macvlan_change_rx_flags()` 又会把 `IFF_PROMISC` 变化向下传到物理父接口。
+
+因此在目标 Linux 6.12 环境中，容器运行时宿主物理接口 `enp3s0` 预计会显示 `PROMISC` 或非零 `promiscuity` 计数。这是内核按引用计数管理的运行时状态，不是项目写入的永久网卡配置。bridge、容器网络命名空间和 macvlan endpoint 被销毁时，对应引用会递减；`uninstall.sh --apply` 删除容器和 `netease-uu-lan` 后应恢复项目启动前的状态。若还有抓包程序、其他 bridge/macvlan 或虚拟化软件持有混杂引用，计数可能仍不为零，不能据此认定项目未还原。
+
+可在安装前、容器运行时和卸载后分别检查：
+
+```sh
+ip -details link show dev enp3s0
+```
+
+这项状态变化会让网卡把交换机实际送到该物理端口的更多帧交给内核，但不等于交换机进行了端口镜像，也不会凭空把全局域网的所有单播流量送到服务器。若某环境只有手动执行 `promisc on` 后才能工作，应把它视为网卡单播过滤、驱动或虚拟交换机配置问题；不要把永久开启命令静默加入安装流程，并优先检查端口安全、MAC spoofing/forged-transmit 策略和多 MAC 限制。
+
 ### 为什么不是 Docker bridge
 
 普通 Docker bridge 不会让局域网设备直接把容器当作同网段网关。要实现相同效果，需要宿主机端口映射、转发、NAT 或策略路由，违背“宿主网络不受影响”的约束。
@@ -448,5 +469,7 @@ docker exec netease-uu nft list ruleset
 - [Docker Compose services 文档](https://docs.docker.com/reference/compose-file/services/)
 - [Linux 内核 ipvlan 文档](https://docs.kernel.org/networking/ipvlan.html)
 - [Linux 内核 IPVLAN Kconfig 说明](https://github.com/torvalds/linux/blob/master/drivers/net/Kconfig)
+- [Linux 6.12 macvlan 实现](https://github.com/torvalds/linux/blob/v6.12/drivers/net/macvlan.c)
+- [Linux 6.12 bridge 混杂模式管理](https://github.com/torvalds/linux/blob/v6.12/net/bridge/br_if.c)
 - [dnsmasq 官方手册](https://thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html)
 - [历史参考实现 dianqk/uuplugin](https://github.com/dianqk/uuplugin)
