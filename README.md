@@ -1,0 +1,199 @@
+# 网易 UU 路由器插件 Docker 封装
+
+在普通 x86_64 Linux 服务器上运行网易 UU 的 OpenWrt 路由器插件，不需要把服务器改造成主路由或旁路由。只有手动把网关和 DNS 指向 UU 容器的 PS5、Switch 等设备会经过加速；宿主机继续使用原来的网络。
+
+> 实机状态：已在 Arch Linux x86_64 服务器上完成安装，验证手机 UU App 可以发现和控制插件，并成功加速 PS5。
+>
+> 项目的方案、脚本和文档主体由 OpenAI Codex 完成，需求定义与实机验收由项目维护者完成。本项目与网易 UU 没有关联，是非官方封装。
+
+```text
+PS5 / Switch ── 网关和 DNS 指向 UU ─────┐
+                                       │
+手机（首次绑定时临时指向 UU）──────────────┤
+                                       ▼
+                           [UU Docker：独立 IP]
+                                       │
+                                       ▼
+                                  原主路由/互联网
+
+Linux 宿主机 ───────────────────────> 原主路由（路径不变）
+```
+
+容器不提供 DHCP，也不会成为全网默认网关。
+
+## 使用前提
+
+- x86_64 Linux 服务器；本项目当前锁定的是 x86_64 插件，不支持 ARM。
+- rootful Docker Engine 和 Docker Compose v2.23.2 或更高版本。
+- 服务器通过物理以太网连接局域网；不要把 Wi-Fi 接口作为父接口。
+- `/dev/net/tun` 可用。若不存在，可先运行 `sudo modprobe tun`。
+- 为容器准备一个与服务器同网段、未被占用且已从 DHCP 地址池排除的固定 IP。
+- 交换机或主路由允许服务器所在物理端口出现一个额外 MAC，且 AP 没有隔离游戏主机与有线服务器。
+
+以下命令假定当前用户有权使用 Docker；否则在脚本前加 `sudo`。
+
+## 安装
+
+进入仓库目录，复制配置模板：
+
+```sh
+cp .env.example .env
+```
+
+编辑 `.env`：
+
+| 配置 | 含义 |
+| --- | --- |
+| `UU_PARENT_INTERFACE` | 连接局域网的物理以太网接口，例如 `enp3s0` |
+| `UU_LAN_SUBNET` | 服务器接口实际所在子网，例如 `10.0.0.0/24` |
+| `UU_UPSTREAM_GATEWAY` | 原主路由地址，例如 `10.0.0.1` |
+| `UU_CONTAINER_IP` | 为 UU 保留的未占用地址，例如 `10.0.0.2` |
+| `UU_MAC_ADDRESS` | 为 UU 固定的、本局域网唯一的 MAC |
+| `UU_UPSTREAM_DNS` | 容器转发 DNS 查询时使用的服务器，通常填原主路由 |
+| `UU_SNAT_MODE` | 保持默认 `off`；仅在文末所述特殊故障下尝试 `masquerade` |
+| `DOWNLOAD_PROXY` | 可选，仅供插件包和镜像构建下载；不会传给运行中的 UU |
+
+从旧版本升级时，请把 `.env` 中的 `UU_HTTP_PROXY` 改名为 `DOWNLOAD_PROXY`；旧名称不再读取。
+
+先运行只读计划，不会安装或修改任何内容：
+
+```sh
+./install.sh
+```
+
+确认配置后安装：
+
+```sh
+./install.sh --apply
+```
+
+安装脚本会检查官方最新版本，但不会自动追新：若发现新版，只输出 warning，仍优先从 `plugin.lock` 记录的官方无 key 地址下载锁定版本。文件通过 MD5、SHA-256、大小和归档路径校验后才会用于构建。脚本最终应显示容器已经健康运行。
+
+## 用手机绑定 UU 插件
+
+1. 确保手机与服务器处于同一个局域网。
+2. 临时把手机当前 Wi-Fi 的 IPv4 网关和 DNS 都改成 `.env` 中的 `UU_CONTAINER_IP`；手机 IP 和子网掩码仍使用原局域网配置。
+3. 打开“UU 主机加速”App，按 OpenWrt/路由器插件流程发现并绑定设备。
+4. 确认 App 可以控制加速后，把手机的 IP 和 DNS 恢复为原设置（通常是自动获取）。
+
+绑定身份保存在 Docker volume `netease-uu-state` 中，重建容器时会保留。
+
+## 配置 PS5 或 Switch
+
+在游戏主机的互联网连接中使用手动 IPv4 配置：
+
+- IP 地址：继续使用该设备原来的局域网地址，建议在主路由中做 DHCP 保留。
+- 子网掩码：与当前局域网一致。
+- 默认网关：填写 `UU_CONTAINER_IP`。
+- DNS：填写 `UU_CONTAINER_IP`。
+
+保存后运行主机自带的联网测试，并在手机 UU App 中选择使用「合作款路由器」，帮顶账后后开启加速。只有采用这组网关和 DNS 的设备会经过容器。
+
+## 日常操作
+
+查看状态和日志：
+
+```sh
+docker compose ps
+docker compose logs --tail 100 uu
+```
+
+重启：
+
+```sh
+docker compose restart uu
+```
+
+停止和重新启动：
+
+```sh
+docker compose stop uu
+docker compose start uu
+```
+
+## 更新 UU 插件
+
+普通安装始终使用锁定版本。以下命令才负责检查或显式升级：
+
+只检查官方版本：
+
+```sh
+./update.sh
+```
+
+下载新版本、更新锁文件、重建并重启：
+
+```sh
+./update.sh --apply
+```
+
+若准备先审计新版本再运行：
+
+```sh
+./update.sh --apply --no-restart
+```
+
+审计完成后再执行 `./install.sh --apply`。
+
+## 卸载与还原
+
+查看卸载计划：
+
+```sh
+./uninstall.sh
+```
+
+移除容器、网络和镜像，但保留 UU 绑定：
+
+```sh
+./uninstall.sh --apply
+```
+
+连绑定状态和插件下载缓存一起删除：
+
+```sh
+./uninstall.sh --apply --purge
+```
+
+项目不会删除 Docker Engine、修改 Docker daemon 配置或清理其他项目的 Docker 缓存。
+
+## 常见问题
+
+### 容器反复重启
+
+先查看日志：
+
+```sh
+docker compose ps
+docker compose logs --tail 200 uu
+```
+
+提交问题时请附上这两段输出，交给 Codex。不要上传 `.env` 或 UU 账号信息。
+
+### UU App 找不到插件
+
+检查手机是否与服务器在同一局域网、手机临时网关和 DNS 是否都指向 `UU_CONTAINER_IP`，以及 AP 是否启用了客户端隔离。还需确认交换机或主路由接受服务器端口后的额外 MAC。
+
+### 宿主机无法 ping 容器
+
+这是 macvlan 的正常隔离行为。局域网内其他设备可以访问容器，但宿主机默认不能直接访问；不要为此在宿主机上额外创建 macvlan 接口。
+
+### 主机能联网但没有加速
+
+确认游戏主机的默认网关和 DNS 都是 `UU_CONTAINER_IP`，并检查手机 App 是否已为正确设备开启加速。如果局域网发布 IPv6，游戏主机可能绕过这个 IPv4 网关；可在主路由中仅对游戏设备关闭 IPv6。
+
+### 请求能发出但没有回包
+
+先保留 `UU_SNAT_MODE=off` 并检查日志、网关和地址冲突。只有确认是回程问题后，才把它改为 `masquerade` 并重建；额外 NAT 可能影响主机显示的 NAT 类型。
+
+## 技术资料
+
+架构选择、权限边界、官方插件审计、Mac 版运行时对照、首次部署故障、实机证据和后续 Agent 更新手册都在 [AUDIT.md](AUDIT.md)。
+
+## 许可证
+
+本仓库自有的脚本和文档采用 [WTFPL Version 2](LICENSE)。该许可证不适用于安装时另行下载的网易 UU 闭源程序。
+
+## 声明
+
+仓库不提交或再分发网易 UU 的闭源二进制；安装时由脚本从 UU 官方服务下载并校验。UU、网易及相关名称和商标归其权利人所有。使用者应自行确认服务条款、网络环境和账号风险。

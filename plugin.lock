@@ -1,0 +1,7 @@
+# 由 update.sh 管理。固定官方无 key 备用 URL，并同时校验 MD5、SHA-256 与大小。
+PLUGIN_TYPE=openwrt-x86_64
+PLUGIN_VERSION=v14.2.2
+PLUGIN_URL=http://uurouter.gdl04.netease.com/uuplugin/openwrt-x86_64/v14.2.2/uu.tar.gz
+PLUGIN_MD5=1645c6c6e7d476c8e2b495ffb20d5163
+PLUGIN_SHA256=587b812fff79c89b57cc0aefec58dc391b285f1de1cf1d998fa00c477e5b1840
+PLUGIN_SIZE=2996705

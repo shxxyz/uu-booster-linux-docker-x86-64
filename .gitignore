@@ -1,0 +1,6 @@
+.env
+vendor/
+tmp/
+.DS_Store
+UUBooster.app/
+*.log

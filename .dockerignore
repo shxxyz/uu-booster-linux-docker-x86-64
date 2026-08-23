@@ -1,0 +1,12 @@
+.git
+.gitignore
+.DS_Store
+.env
+tmp
+UUBooster.app
+vendor/*.tmp
+README.md
+AUDIT.md
+install.sh
+update.sh
+uninstall.sh
