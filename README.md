@@ -8,7 +8,7 @@
 
 ```text
 PS5 / Switch ── 网关和 DNS 指向 UU ─────┐
-                                       │
+                                      ｜
 手机（首次绑定时临时指向 UU）──────────────┤
                                        ▼
                            [UU Docker：独立 IP]
@@ -34,7 +34,7 @@ Linux 宿主机 ─────────────────────�
 
 ## 安装
 
-进入仓库目录，复制配置模板：
+克隆本项目到本地，复制配置模板：
 
 ```sh
 cp .env.example .env
@@ -53,7 +53,6 @@ cp .env.example .env
 | `UU_SNAT_MODE` | 保持默认 `off`；仅在文末所述特殊故障下尝试 `masquerade` |
 | `DOWNLOAD_PROXY` | 可选，仅供插件包和镜像构建下载；不会传给运行中的 UU |
 
-从旧版本升级时，请把 `.env` 中的 `UU_HTTP_PROXY` 改名为 `DOWNLOAD_PROXY`；旧名称不再读取。
 
 先运行只读计划，不会安装或修改任何内容：
 
@@ -73,7 +72,7 @@ cp .env.example .env
 
 1. 确保手机与服务器处于同一个局域网。
 2. 临时把手机当前 Wi-Fi 的 IPv4 网关和 DNS 都改成 `.env` 中的 `UU_CONTAINER_IP`；手机 IP 和子网掩码仍使用原局域网配置。
-3. 打开“UU 主机加速”App，按 OpenWrt/路由器插件流程发现并绑定设备。
+3. 打开“UU 主机加速”App，按 OpenWrt／合作款路由器流程发现并绑定设备。
 4. 确认 App 可以控制加速后，把手机的 IP 和 DNS 恢复为原设置（通常是自动获取）。
 
 绑定身份保存在 Docker volume `netease-uu-state` 中，重建容器时会保留。
@@ -87,7 +86,7 @@ cp .env.example .env
 - 默认网关：填写 `UU_CONTAINER_IP`。
 - DNS：填写 `UU_CONTAINER_IP`。
 
-保存后运行主机自带的联网测试，并在手机 UU App 中选择使用「合作款路由器」，帮顶账后后开启加速。只有采用这组网关和 DNS 的设备会经过容器。
+保存后运行主机自带的联网测试，并在手机 UU App 中选择使用中选择游戏、开启加速。只有采用这组网关和 DNS 的设备会经过容器。
 
 ## 日常操作
 
