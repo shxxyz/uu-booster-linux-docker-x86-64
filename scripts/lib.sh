@@ -36,6 +36,17 @@ env_value() {
     field_from_file "$ENV_FILE" "$key"
 }
 
+plugin_backup_url_version() {
+    local url="$1"
+    if [[ "$url" =~ ^https?://uurouter\.gdl[0-9]+\.netease\.com/uuplugin/openwrt-x86_64/(v[0-9]+(\.[0-9]+)+)/uu\.tar\.gz$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+    elif [[ "$url" =~ ^https?://uurouter-[0-9]+\.gdl\.nieapps\.com/uuplugin/openwrt-x86_64/(v[0-9]+(\.[0-9]+)+)/uu\.tar\.gz$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+    else
+        return 1
+    fi
+}
+
 load_lock() {
     [ -f "$LOCK_FILE" ] || die "missing $LOCK_FILE"
     PLUGIN_TYPE="$(field_from_file "$LOCK_FILE" PLUGIN_TYPE)"
@@ -47,11 +58,8 @@ load_lock() {
     [[ "$PLUGIN_TYPE" == "openwrt-x86_64" ]] || die "unexpected plugin type in lock"
     [[ "$PLUGIN_VERSION" =~ ^v[0-9]+(\.[0-9]+)+$ ]] || die "invalid locked version"
     local url_version
-    if [[ "$PLUGIN_URL" =~ ^https?://uurouter\.gdl[0-9]+\.netease\.com/uuplugin/openwrt-x86_64/(v[0-9]+(\.[0-9]+)+)/uu\.tar\.gz$ ]]; then
-        url_version="${BASH_REMATCH[1]}"
-    else
-        die "invalid locked plugin URL"
-    fi
+    url_version="$(plugin_backup_url_version "$PLUGIN_URL")" \
+        || die "invalid locked plugin URL"
     [ "$url_version" = "$PLUGIN_VERSION" ] || die "locked URL version does not match locked version"
     [[ "$PLUGIN_MD5" =~ ^[0-9a-f]{32}$ ]] || die "invalid locked MD5"
     [[ "$PLUGIN_SHA256" =~ ^[0-9a-f]{64}$ ]] || die "invalid locked SHA-256"
@@ -149,9 +157,7 @@ query_latest() {
         LATEST_ERROR="official backup URL unexpectedly contains a query or fragment"
         return 1
     fi
-    if [[ "$LATEST_BACKUP" =~ ^https?://uurouter\.gdl[0-9]+\.netease\.com/uuplugin/openwrt-x86_64/(v[0-9]+(\.[0-9]+)+)/uu\.tar\.gz$ ]]; then
-        backup_version="${BASH_REMATCH[1]}"
-    else
+    if ! backup_version="$(plugin_backup_url_version "$LATEST_BACKUP")"; then
         LATEST_ERROR="official API returned an unexpected backup download URL"
         return 1
     fi
@@ -159,6 +165,11 @@ query_latest() {
         LATEST_ERROR="official primary and backup URLs disagree on version"
         return 1
     fi
+    case "$LATEST_BACKUP" in
+        http://uurouter-*.gdl.nieapps.com/*)
+            LATEST_BACKUP="https://${LATEST_BACKUP#http://}"
+            ;;
+    esac
 }
 
 md5_file() {

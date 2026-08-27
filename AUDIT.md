@@ -6,18 +6,18 @@
 
 ## 1. 当前状态快照
 
-记录日期：2026-08-23。
+记录日期：2026-08-28。
 
 ### 官方插件锁
 
 - 类型：`openwrt-x86_64`
-- 版本：`v14.2.2`
-- 固定下载地址：`http://uurouter.gdl04.netease.com/uuplugin/openwrt-x86_64/v14.2.2/uu.tar.gz`
-- 官方 API MD5：`1645c6c6e7d476c8e2b495ffb20d5163`
-- 本项目锁定 SHA-256：`587b812fff79c89b57cc0aefec58dc391b285f1de1cf1d998fa00c477e5b1840`
-- 大小：`2996705` 字节
-- 无 key 地址实测返回 HTTP 200，文件大小、MD5、SHA-256 和归档结构均与锁一致。
-- 发布前再次执行 `./update.sh`，官方版本、备用 URL 和 MD5 仍与 `plugin.lock` 一致。
+- 版本：`v14.6.22`
+- 固定下载地址：`https://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.6.22/uu.tar.gz`
+- 官方 API MD5：`a35ec2319472d54620af047d05d41640`
+- 本项目锁定 SHA-256：`a1357032179379a21dc38d0c0fe6da5c35967c8c85920b924c8200d2530b8533`
+- 大小：`3133127` 字节
+- 官方 API 返回的无 key 地址使用 HTTP；同一路径的 HTTP、证书有效的 HTTPS 和带 key 主地址均实测返回相同文件，大小、MD5、SHA-256 和归档结构与锁一致。本项目固定其 HTTPS 形式。
+- 本次执行 `./update.sh --apply --no-restart` 后，官方最新版本和 MD5 与 `plugin.lock` 一致。
 
 ### 实机环境与结果
 
@@ -37,13 +37,15 @@
 - 手机 UU App 能发现、绑定和控制插件；
 - PS5 把网关和 DNS 指向容器后能联网并实际加速。
 
+这些实机结果来自当时锁定的 `v14.2.2`。`v14.6.22` 已完成下载链、归档和闭源二进制的静态差异审计，但尚未在目标 Linux 服务器上完成运行、手机控制和 PS5 加速回归，不能把静态兼容判断当成实机结论。
+
 尚未由用户报告或单独验收：
 
 - Switch；
 - PS5 的具体 NAT 类型；
 - 宿主机或 Docker daemon 重启后的自动恢复；
 - `uninstall.sh --apply --purge` 的完整实机还原检查；
-- 将来插件版本的兼容性；
+- `v14.6.22` 及将来插件版本的实机兼容性；
 - 游戏设备 IPv6 是否被主路由关闭或仍可能绕行。
 
 不要把“本版本在这一套网络中成功”泛化为所有交换机、AP、网卡和内核都兼容。
@@ -204,21 +206,21 @@ Docker Engine 自身会在宿主机建立服务、`docker0` 和 Docker 防火墙
 https://router.uu.163.com/api/plugin?type=openwrt-x86_64
 ```
 
-2026-08-23 的接口行为分两种：普通请求返回 JSON；带 `Accept: text/plain` 时返回四个 CSV 字段，依次为带 `key1`/`key2` 的主 URL、MD5、无 key 的 `url_bak` 和空字段。签名参数是临时数据，不写入锁文件、日志或文档。
+2026-08-28 的接口行为分两种：普通请求返回 JSON；带 `Accept: text/plain` 时返回四个 CSV 字段，依次为带 `key1`/`key2` 的主 URL、MD5、无 key 的 `url_bak` 和空字段。签名参数是临时数据，不写入锁文件、日志或文档。
 
 当时的无 key 备用地址为：
 
 ```text
-http://uurouter.gdl04.netease.com/uuplugin/openwrt-x86_64/v14.2.2/uu.tar.gz
+http://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.6.22/uu.tar.gz
 ```
 
-对这个精确地址进行了完整 GET：返回 HTTP 200，下载 `2996705` 字节，MD5 和 SHA-256 均与本节开头的锁值一致，tar 顶层也符合 allowlist。该主机的 HTTPS 证书与 `uurouter.gdl04.netease.com` 不匹配，正常证书校验会失败，所以不能简单把该 URL 提升为 HTTPS，也没有关闭证书校验。
+对这个精确 HTTP 地址及其 HTTPS 形式分别进行了完整 GET：两者都返回 200，下载 `3133127` 字节，MD5、SHA-256、tar 顶层和带 key 主地址逐字节一致。新 `nieapps.com` 主机的 HTTPS 证书校验正常，因此 `plugin.lock` 固定同一路径的 HTTPS 形式，不沿用 API 返回的明文协议。历史 `v14.2.2` 所在的 `uurouter.gdl04.netease.com` 与证书不匹配，旧版锁只能使用 HTTP；这个限制不再适用于当前主机。
 
 普通安装的下载顺序和约束是：
 
-1. 从 `plugin.lock` 读取固定版本、无 key URL、MD5、SHA-256 和大小，并验证 URL 的网易域名、路径及版本一致性；
+1. 从 `plugin.lock` 读取固定版本、无 key URL、MD5、SHA-256 和大小，并验证 URL 只属于历史 `uurouter.gdl数字.netease.com` 或当前 `uurouter-数字.gdl.nieapps.com` 精确域名族，且路径和版本一致；
 2. 通过 HTTPS API 检查最新版本；发现不同版本只输出 warning，不改变锁，也不自动下载新版；
-3. 优先按锁中记录的协议下载固定 URL；当前 `gdl04` 地址因此使用 HTTP；
+3. 优先按锁中记录的协议下载固定 URL；API 为当前 `nieapps.com` 备用地址返回 HTTP 时，升级流程在严格验证域名和路径后将其固定为已实测可用的 HTTPS；
 4. 仅当固定地址发生传输失败、且 API 返回的版本与 MD5 仍和锁完全一致时，才回退到带临时 key 的主地址；主地址的已知 `http://uurouter.gdl.netease.com` 会提升为 HTTPS；
 5. 下载后同时校验锁定 MD5、SHA-256、大小和 tar 路径 allowlist，任一不符都拒绝构建；
 6. 直连失败时才尝试 `.env` 中显式配置的 `DOWNLOAD_PROXY`。
@@ -236,9 +238,17 @@ xuplugin-guardian
 
 三个可执行文件都是静态链接 Linux x86-64 ELF；`uuplugin` 和 guardian 已 strip。
 
-无 key 备用下载缺少 HTTPS 传输认证；当前版本的安全锚是仓库中预先记录的 SHA-256。中间人可以阻断或替换下载并导致安装失败，但替换内容无法通过既有 SHA-256 时不会执行。显式升级时尚无预先可信的新 SHA-256，首次信任仍依赖 UU 官方 HTTPS API 提供的 MD5、随后计算的 SHA-256 和人工审计；官方没有可验证的代码签名，因此不能证明闭源程序本身安全。
+当前 `v14.6.22` 的固定无 key 地址使用证书有效的 HTTPS，仓库中预先记录的 SHA-256 仍是普通安装的内容完整性锚；传输内容不匹配时不会执行。显式升级时尚无预先可信的新 SHA-256，首次信任仍依赖 UU 官方 HTTPS API 提供的 MD5、随后计算的 SHA-256 和人工审计；官方没有可验证的代码签名，因此不能证明闭源程序本身安全。历史 `v14.2.2` 无 key 主机只能使用 HTTP，已不再是当前锁的传输边界。
 
-`update.sh --apply` 与普通安装不同：它通过 API 返回的带临时 key 主地址下载新包，并强制使用 HTTPS；校验 API MD5 和归档路径后计算新 SHA-256，再把同版本的无 key `url_bak` 写入 `plugin.lock`，供后续普通安装固定使用。同版本但 MD5 突变时不会自动改锁。
+`update.sh --apply` 与普通安装不同：它通过 API 返回的带临时 key 主地址下载新包，并强制使用 HTTPS；校验 API MD5 和归档路径后计算新 SHA-256，再把同版本的无 key `url_bak` 写入 `plugin.lock`，供后续普通安装固定使用。若备用地址属于已验证的当前 `nieapps.com` 精确域名族，则把协议提升为 HTTPS；同版本但 MD5 突变时不会自动改锁。
+
+### `v14.6.22` 升级审计（2026-08-28）
+
+- 上游把 `url_bak` 从旧的 `uurouter.gdl数字.netease.com` 迁到 `uurouter-数字.gdl.nieapps.com`。脚本只增加这个精确域名族，不接受任意 `nieapps.com` 子域、查询参数、fragment、其他架构或其他归档路径。
+- 新旧包顶层均严格只有 `uu.conf`、`uuplugin`、`xtables-nft-multi` 和 `xuplugin-guardian`。
+- `uu.conf` 仅把版本从 `v14.2.2` 改为 `v14.6.22`；`uuplugin` 发生变化。`xtables-nft-multi` 和 `xuplugin-guardian` 与旧包逐字节一致，SHA-256 分别仍为 `9cd422fa3bc89b5ef855faba274cfa01ecd4478a64171dd95bf78ef5bd1e957f` 和 `0353279bc1c2542a5fac0bfa9f6dc8b71e94cdae17b70db23241348f8d7af23e`。
+- 三个可执行文件仍是静态链接的 Linux x86-64 ELF。针对新 `uuplugin` 的命令、路径和设备字符串检查仍可见 `/dev/net/tun`、`br-lan`、iproute2 与 iptables/nftables 假设，未发现需要新增宿主挂载、设备节点、系统包或 capability 的证据；新增的部分 TCP DNAT/INPUT 规则模板仍在既有 `NET_ADMIN` 和 netfilter 范围内。
+- 没有找到网易发布的该版本公开 changelog。以上只能支持“现有容器边界大概率仍兼容”的静态判断，目标服务器上的容器健康、手机控制、PS5 加速、DNS/netfilter 规则和宿主机不受影响仍必须实测。
 
 ## 8. 官方 OpenWrt 安装器审计
 
