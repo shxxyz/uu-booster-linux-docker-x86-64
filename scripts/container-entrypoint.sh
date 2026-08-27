@@ -214,7 +214,7 @@ while [ "$stopping" -eq 0 ]; do
     fi
 
     if [ -e /tmp/uu/uu.update ]; then
-        log "UU requested an update; run ./update.sh --apply on the host"
+        log "UU requested an update; ignoring it until a reviewed repository bump is installed"
         rm -f /tmp/uu/uu.update
     fi
 

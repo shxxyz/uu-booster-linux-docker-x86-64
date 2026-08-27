@@ -1,17 +1,16 @@
+> 本项目由 Codex 和 GPT-5.6-Sol 完成。
+
 # 网易 UU 路由器插件 Docker 封装
 
-在普通 x86_64 Linux 服务器上运行网易 UU 的 OpenWrt 路由器插件。
-
-> 实机状态：已在 Arch Linux x86_64 服务器上完成安装，验证手机 UU App 可以发现和控制插件，并成功加速 PS5。
->
-> 项目的方案、脚本和文档主体由 OpenAI Codex 完成，需求定义与实机验收由项目维护者完成。本项目与网易 UU 没有关联，是非官方封装。
+在普通 x86_64 Linux 服务器上运行网易 UU 加速器，无需 OpenWrt 环境。  
+容器不提供 DHCP，也不会成为全网默认网关。
 
 ```text
 PS5 / Switch ── 网关和 DNS 指向 UU ─────┐
                                       ｜
 手机（首次绑定时临时指向 UU）──────────────┤
                                        ▼
-                           [UU Docker：独立 IP]
+                              [UU Docker：独立 IP]
                                        │
                                        ▼
                                   原主路由/互联网
@@ -19,17 +18,14 @@ PS5 / Switch ── 网关和 DNS 指向 UU ─────┐
 Linux 宿主机 ───────────────────────> 原主路由（路径不变）
 ```
 
-容器不提供 DHCP，也不会成为全网默认网关。
-
 ## 使用前提
 
 - x86_64 Linux 服务器；本项目当前锁定的是 x86_64 插件，不支持 ARM。
 - rootful Docker Engine 和 Docker Compose v2.23.2 或更高版本。
-- 服务器通过物理以太网连接局域网；不要把 Wi-Fi 接口作为父接口。
+- 服务器通过物理以太网连接局域网；不支持 Wi-Fi 接口作为父接口。
 - `/dev/net/tun` 可用。若不存在，可先运行 `sudo modprobe tun`。
 - 为容器准备一个与服务器同网段、未被占用且已从 DHCP 地址池排除的固定 IP。
-- 交换机或主路由允许服务器所在物理端口出现一个额外 MAC，且 AP 没有隔离游戏主机与有线服务器。  
-  > 无需手动开启宿主网卡的混杂模式，Linux 会在容器运行时按需管理。
+- 交换机或主路由允许服务器所在物理端口出现一个额外 MAC，且 AP 没有隔离游戏主机与有线服务器。
 
 以下命令假定当前用户有权使用 Docker；否则在脚本前加 `sudo`。
 
@@ -52,47 +48,56 @@ cp .env.example .env
 | `UU_MAC_ADDRESS` | 为 UU 固定的、本局域网唯一的 MAC |
 | `UU_UPSTREAM_DNS` | 容器转发 DNS 查询时使用的服务器，通常填原主路由 |
 | `UU_SNAT_MODE` | 保持默认 `off`；仅在文末所述特殊故障下尝试 `masquerade` |
-| `DNS_HOST_OVERRIDES` | 可选，把少量精确域名解析到同一局域网内的指定 IPv4；留空即关闭 |
+| `DNS_HOST_OVERRIDES` | 可选，把少量精确域名解析到同一局域网内的指定 IPv4。留空即关闭 |
 | `DOWNLOAD_PROXY` | 可选，仅供插件包和镜像构建下载；不会传给运行中的 UU |
 
-### 可选：精确覆盖 DNS
 
+<details>
+<summary>可选：DNS 覆写</summary>
 需要把特定域名指向局域网服务时，在 `.env` 中按 `域名=IPv4` 填写：
 
 ```dotenv
-DNS_HOST_OVERRIDES=ingest.global-contribute.live-video.net=10.0.0.80
+DNS_HOST_OVERRIDES=ingest.global-contribute.live-video.net=10.0.0.42
 ```
 
 多个域名用逗号分隔，不要添加空格：
 
 ```dotenv
-DNS_HOST_OVERRIDES=one.example.com=10.0.0.80,two.example.com=10.0.0.80
+DNS_HOST_OVERRIDES=one.example.com=10.0.0.42,two.example.com=10.0.0.42
 ```
 
-这里只接受最多 32 个完整、精确的域名，不支持通配符；目标必须是 `UU_LAN_SUBNET` 内的可用 IPv4，且不能是 UU 容器自身。未列出的查询仍转发给 `UU_UPSTREAM_DNS`，宿主机和没有使用 UU DNS 的局域网设备不受影响。
+- 只接受最多 32 个完整、精确的域名
+- 不支持通配符
+- 目标必须是 `UU_LAN_SUBNET` 内的可用 IPv4，且不能是 UU 容器自身
+- 未列出的查询仍转发给 `UU_UPSTREAM_DNS`
+- 宿主机和没有使用 UU DNS 的局域网设备不受影响
 
-例如按 [PS5 无采集卡推流教程](https://codming.com/posts/ps5-streaming-to-chinese-platforms/) 使用 PStream，且它与 UU 服务器同机、RTMP 端口映射为 `1935:1935` 时，应把 PS5 实际使用的 Twitch 推流服务器域名映射到服务器的局域网地址，而不是 Tailscale 域名。修改后运行 `sudo ./install.sh --apply` 重新创建容器；已有 UU volume 和登录绑定会保留。
+> 猜你想看：[PS5 无采集卡推流教程](https://codming.com/posts/ps5-streaming-to-chinese-platforms/)
+</details>
 
-先运行只读计划，不会安装或修改任何内容：
+安装脚本默认不会安装或修改任何内容：
 
 ```sh
 ./install.sh
 ```
 
-确认配置后安装：
+确认配置后实施安装：
 
 ```sh
 ./install.sh --apply
 ```
 
-安装脚本会检查官方最新版本，但不会自动追新：若发现新版，只输出 warning，仍优先从 `plugin.lock` 记录的官方无 key 地址下载锁定版本。文件通过 MD5、SHA-256、大小和归档路径校验后才会用于构建。脚本最终应显示容器已经健康运行。
+安装脚本只会安装当前仓库 `plugin.lock` 锁定的版本。  
+锁定包通过 MD5、SHA-256、大小和归档路径校验后才会用于构建。  
+脚本最终应显示容器已经健康运行。
 
 ## 用手机绑定 UU 插件
 
 1. 确保手机与服务器处于同一个局域网。
 2. 临时把手机当前 Wi-Fi 的 IPv4 网关和 DNS 都改成 `.env` 中的 `UU_CONTAINER_IP`；手机 IP 和子网掩码仍使用原局域网配置。
-3. 打开“UU 主机加速”App，按 OpenWrt／合作款路由器流程发现并绑定设备。
+3. 下载并打开「UU 主机加速」App，按 OpenWrt／合作款路由器流程发现并绑定设备。
 4. 确认 App 可以控制加速后，把手机的 IP 和 DNS 恢复为原设置（通常是自动获取）。
+5. 后续加速、更换游戏等操作无需再修改 IP、DNS。
 
 绑定身份保存在 Docker volume `netease-uu-state` 中，重建容器时会保留。
 
@@ -129,29 +134,18 @@ docker compose stop uu
 docker compose start uu
 ```
 
-## 更新 UU 插件
+## 更新项目与 UU 插件
 
-普通安装始终使用锁定版本。以下命令才负责检查或显式升级：
+本项目不提供自动追踪或切换上游版本的命令。每个 UU 插件版本都必须先完成审计，再通过新的仓库提交更新 `plugin.lock`。
 
-只检查官方版本：
-
-```sh
-./update.sh
-```
-
-下载新版本、更新锁文件、重建并重启：
+更新本地项目并重新部署：
 
 ```sh
-./update.sh --apply
+git pull --ff-only
+sudo ./install.sh --apply
 ```
 
-若准备先审计新版本再运行：
-
-```sh
-./update.sh --apply --no-restart
-```
-
-审计完成后再执行 `./install.sh --apply`。
+`install.sh` 仍只安装刚刚拉取到的锁定版本。命名 volume `netease-uu-state` 会被复用，正常更新无需重新登录或绑定 UU。
 
 ## 卸载与还原
 

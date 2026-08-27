@@ -1,4 +1,4 @@
-# 由 update.sh 管理。固定官方无 key 备用 URL，并同时校验 MD5、SHA-256 与大小。
+# 由经审计的仓库提交管理。固定官方无 key 备用 URL，并同时校验 MD5、SHA-256 与大小。
 PLUGIN_TYPE=openwrt-x86_64
 PLUGIN_VERSION=v14.6.22
 PLUGIN_URL=https://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.6.22/uu.tar.gz

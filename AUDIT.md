@@ -1,6 +1,6 @@
 # UU Docker 技术审计与 Agent 维护手册
 
-本文面向维护者和后续 Agent，记录用户版 README 刻意省略的调查证据、设计取舍、安全边界、失败历史和升级流程。用户安装说明见 [README.md](README.md)。
+本文面向维护者和后续 Agent，记录用户版 README 刻意省略的调查证据、设计取舍、安全边界、失败历史和版本维护流程。用户安装说明见 [README.md](README.md)。
 
 项目方案、脚本和文档主体由 OpenAI Codex 完成；需求、网络条件和实机结果由项目维护者提供并验证。
 
@@ -17,7 +17,7 @@
 - 本项目锁定 SHA-256：`a1357032179379a21dc38d0c0fe6da5c35967c8c85920b924c8200d2530b8533`
 - 大小：`3133127` 字节
 - 官方 API 返回的无 key 地址使用 HTTP；同一路径的 HTTP、证书有效的 HTTPS 和带 key 主地址均实测返回相同文件，大小、MD5、SHA-256 和归档结构与锁一致。本项目固定其 HTTPS 形式。
-- 本次执行 `./update.sh --apply --no-restart` 后，官方最新版本和 MD5 与 `plugin.lock` 一致。
+- 本次版本锁提交完成时，官方最新版本和 MD5 与 `plugin.lock` 一致。
 
 ### 实机环境与结果
 
@@ -61,9 +61,10 @@
 3. 宿主机默认路由、DNS 和普通流量路径不受 UU 影响；
 4. 优先使用 Docker 隔离闭源插件的 TUN、路由和防火墙修改；
 5. 不使用 `--privileged` 或 host network；
-6. 安装和更新默认 dry-run，只有显式 `--apply` 才写入；
-7. 能明确卸载，并区分“保留绑定”和“彻底清理”；
-8. 网络失败时允许使用可选 HTTP 代理，但公开模板不预设私人代理。
+6. 安装和卸载默认 dry-run，只有显式 `--apply` 才写入；
+7. 插件版本只通过经审计的仓库提交更新，不在目标机上自动改锁或追新；
+8. 能明确卸载，并区分“保留绑定”和“彻底清理”；
+9. 网络失败时允许使用可选 HTTP 代理，但公开模板不预设私人代理。
 
 后续修改若破坏任意一项，必须在 README 和变更说明中显式披露，不能静默扩大宿主机影响面。
 
@@ -247,8 +248,8 @@ http://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.6.22/uu.tar.gz
 普通安装的下载顺序和约束是：
 
 1. 从 `plugin.lock` 读取固定版本、无 key URL、MD5、SHA-256 和大小，并验证 URL 只属于历史 `uurouter.gdl数字.netease.com` 或当前 `uurouter-数字.gdl.nieapps.com` 精确域名族，且路径和版本一致；
-2. 通过 HTTPS API 检查最新版本；发现不同版本只输出 warning，不改变锁，也不自动下载新版；
-3. 优先按锁中记录的协议下载固定 URL；API 为当前 `nieapps.com` 备用地址返回 HTTP 时，升级流程在严格验证域名和路径后将其固定为已实测可用的 HTTPS；
+2. 通过 HTTPS API 检查最新版本；发现不同版本只输出 `NOTE`，不改变锁，也不自动下载新版；元数据查询失败或同版本 MD5 异常仍输出 `WARNING`；
+3. 优先按锁中记录的协议下载固定 URL；维护者制作版本 bump 提交时，可在严格验证域名、路径和内容后，把当前 `nieapps.com` 备用地址固定为已实测可用的 HTTPS；
 4. 仅当固定地址发生传输失败、且 API 返回的版本与 MD5 仍和锁完全一致时，才回退到带临时 key 的主地址；主地址的已知 `http://uurouter.gdl.netease.com` 会提升为 HTTPS；
 5. 下载后同时校验锁定 MD5、SHA-256、大小和 tar 路径 allowlist，任一不符都拒绝构建；
 6. 直连失败时才尝试 `.env` 中显式配置的 `DOWNLOAD_PROXY`。
@@ -266,9 +267,9 @@ xuplugin-guardian
 
 三个可执行文件都是静态链接 Linux x86-64 ELF；`uuplugin` 和 guardian 已 strip。
 
-当前 `v14.6.22` 的固定无 key 地址使用证书有效的 HTTPS，仓库中预先记录的 SHA-256 仍是普通安装的内容完整性锚；传输内容不匹配时不会执行。显式升级时尚无预先可信的新 SHA-256，首次信任仍依赖 UU 官方 HTTPS API 提供的 MD5、随后计算的 SHA-256 和人工审计；官方没有可验证的代码签名，因此不能证明闭源程序本身安全。历史 `v14.2.2` 无 key 主机只能使用 HTTP，已不再是当前锁的传输边界。
+当前 `v14.6.22` 的固定无 key 地址使用证书有效的 HTTPS，仓库中预先记录的 SHA-256 仍是普通安装的内容完整性锚；传输内容不匹配时不会执行。制作新版本锁提交时尚无预先可信的新 SHA-256，首次信任仍依赖 UU 官方 HTTPS API 提供的 MD5、随后计算的 SHA-256 和人工审计；官方没有可验证的代码签名，因此不能证明闭源程序本身安全。历史 `v14.2.2` 无 key 主机只能使用 HTTP，已不再是当前锁的传输边界。
 
-`update.sh --apply` 与普通安装不同：它通过 API 返回的带临时 key 主地址下载新包，并强制使用 HTTPS；校验 API MD5 和归档路径后计算新 SHA-256，再把同版本的无 key `url_bak` 写入 `plugin.lock`，供后续普通安装固定使用。若备用地址属于已验证的当前 `nieapps.com` 精确域名族，则把协议提升为 HTTPS；同版本但 MD5 突变时不会自动改锁。
+仓库不提供自动更新锁文件的脚本。上游版本只能在独立工作区中下载和审计，由维护者手动更新 `plugin.lock`、适配代码与本文件，并作为一个可复核的提交发布。目标机上的 `install.sh` 无论官方版本多新，都只能安装当前 checkout 已锁定的包。
 
 ### `v14.6.22` 升级审计（2026-08-28）
 
@@ -293,9 +294,9 @@ xuplugin-guardian
 
 本项目不运行 monitor：
 
-- 收到 `uu.update` 时只记录日志并要求维护者运行 `update.sh --apply`；
+- 收到 `uu.update` 时只记录日志并删除标记，继续使用当前锁定版本，直到安装经审计的仓库 bump；
 - 收到 `uu.uninstall` 时只删除持久化绑定身份并停止；
-- 版本更新必须显式进行并重新构建镜像。
+- 版本更新必须先形成仓库提交，再由用户拉取并重新构建镜像。
 
 ## 9. Linux 闭源二进制静态审计
 
@@ -406,7 +407,6 @@ dnsmasq: failed to change group-id to root: Operation not permitted
 | `Dockerfile` | 构建运行环境并执行包内 SHA-256 检查 |
 | `compose.yaml` | macvlan、capability、TUN、只读文件系统、卷和健康检查 |
 | `install.sh` | dry-run 默认；目标机检查、官方包校验、构建和健康等待 |
-| `update.sh` | dry-run 默认；查询新版本、显式下载和更新锁 |
 | `uninstall.sh` | dry-run 默认；删除项目 Docker 对象，可选清除绑定和缓存 |
 | `scripts/lib.sh` | 官方 API、下载、代理、hash、archive allowlist 和 Compose 封装 |
 | `scripts/container-entrypoint.sh` | 建立 `br-lan`、启动 DNS/插件、信号和重启监管 |
@@ -416,28 +416,29 @@ dnsmasq: failed to change group-id to root: Operation not permitted
 | `.gitignore` / `.dockerignore` | 排除本地配置、闭源包、Mac App、日志和无关构建上下文 |
 | `LICENSE` | 本项目自有脚本和文档采用的 WTFPL Version 2 全文 |
 
-## 14. 后续 Agent 的插件更新流程
+## 14. 后续 Agent 的上游版本 bump 流程
 
-UU 发布新版本时，不要直接运行 `update.sh --apply` 后宣告完成。建议流程：
+UU 发布新版本时，版本 bump 必须作为一次独立、可复核的仓库变更完成，不能在用户目标机上自动改锁。建议流程：
 
 1. 先完整阅读本文件、`plugin.lock`、`scripts/lib.sh`、入口脚本和 Compose；
-2. 运行 `./update.sh`，记录锁定版本与官方最新版本；
-3. 用 `./update.sh --apply --no-restart` 下载并更新锁，但暂不运行；
-4. 核对 API 主 URL 与 `url_bak` 的主机、协议、查询参数、版本，以及 MD5、SHA-256、大小和 tar 路径 allowlist；临时 key 不得写入仓库；
-5. 对新旧包运行 `file`、归档列表和针对性 `strings` 审计；
+2. 使用带 `Accept: text/plain` 的官方 API 查询版本，并把响应保存到项目 `tmp/` 下的临时文件；记录版本和官方 MD5，但不要把带 `key1` / `key2` 的签名 URL 写入仓库、日志或文档；
+3. 在 `tmp/` 中通过 API 返回的签名 HTTPS 主地址下载候选包，校验官方 MD5，并确认归档路径仍严格符合 allowlist；
+4. 核对 `url_bak` 的主机、协议、查询参数和版本；单独验证无 key 地址可下载相同内容，优先实测证书有效的 HTTPS 形式，再计算 SHA-256 和大小；
+5. 对新旧包运行 `file`、归档列表、hash 比较和针对性 `strings` 审计；
 6. 特别检查是否改变 TUN 名称、`br-lan` 假设、PID 文件、身份文件、更新标记、iproute2/netfilter 命令或所需设备节点；
-7. 若包新增文件或 capability，先解释原因并更新安全模型，不能直接放宽；
-8. 运行 Shell/YAML 静态检查和 Docker 构建；
-9. 在目标服务器检查健康状态、容器内接口/路由/规则；
-10. 用手机 App 完成发现和控制，再用 PS5/Switch 做实际联网与加速；
-11. 核对宿主机默认路由、DNS、sysctl 和防火墙没有因项目改变；
-12. 提交 `plugin.lock` 和相应审计记录，绝不提交 `vendor/uu.tar.gz`。
+7. 若包新增文件、系统依赖、设备节点或 capability，先解释原因并更新安全模型，不能直接放宽；
+8. 审计完成后手动更新 `plugin.lock`、必要的下载域名 allowlist、适配代码和本文件；不要新增自动改锁或自动追新的用户入口；
+9. 运行 Shell/YAML 静态检查、回归测试和 Docker 构建；
+10. 在目标服务器检查健康状态、容器内接口、路由和规则；
+11. 用手机 App 完成发现和控制，再用 PS5/Switch 做实际联网与加速；
+12. 核对宿主机默认路由、DNS、sysctl 和防火墙没有因项目改变；
+13. 把锁文件、适配和审计记录放在同一个版本 bump 提交中，绝不提交 `vendor/uu.tar.gz` 或 `tmp/` 内容。用户只需拉取该提交后运行 `install.sh --apply`。
 
 必须保留的行为：
 
-- 安装、更新和卸载默认只报告，写入需要 `--apply`；
-- 普通安装遇到官方新版时只 warning，继续使用 `plugin.lock` 的固定版本；
-- 同版本官方 MD5 变化时，`update.sh` 拒绝自动改锁；已有缓存只能在锁定 SHA-256 仍匹配时继续使用；
+- 安装和卸载默认只报告，写入需要 `--apply`；
+- 普通安装遇到官方新版时只输出 `NOTE`，继续使用 `plugin.lock` 的固定版本；
+- 同版本官方 MD5 变化时输出 `WARNING`，且绝不自动改锁；已有缓存只能在锁定 SHA-256 仍匹配时继续使用；
 - 插件 tar 出现额外路径时拒绝继续；
 - 不自动执行 UU monitor 或未知下载脚本；
 - 不使用 `--privileged`、host network 或 Docker socket；
@@ -450,7 +451,7 @@ UU 发布新版本时，不要直接运行 `update.sh --apply` 后宣告完成�
 
 ```sh
 sh -n scripts/container-entrypoint.sh scripts/healthcheck.sh scripts/render-dns-overrides.sh
-bash -n install.sh update.sh uninstall.sh scripts/lib.sh
+bash -n install.sh uninstall.sh scripts/lib.sh
 tests/test-dns-overrides.sh
 ./install.sh
 ./uninstall.sh

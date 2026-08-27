@@ -12,6 +12,10 @@ say() {
     printf '%s\n' "$*"
 }
 
+note() {
+    printf 'NOTE: %s\n' "$*"
+}
+
 warn() {
     printf 'WARNING: %s\n' "$*" >&2
 }
@@ -191,7 +195,7 @@ validate_plugin_archive() {
     [ "$listing" = "$expected" ] || die "plugin archive contains unexpected paths"
 }
 
-check_latest_for_warning() {
+check_latest_status() {
     LATEST_CHECK_OK=0
     if ! query_latest; then
         warn "${LATEST_ERROR:-unable to check the official latest version}; continuing with locked $PLUGIN_VERSION"
@@ -199,7 +203,7 @@ check_latest_for_warning() {
     fi
     LATEST_CHECK_OK=1
     if [ "$LATEST_VERSION" != "$PLUGIN_VERSION" ]; then
-        warn "official latest is $LATEST_VERSION; continuing with locked $PLUGIN_VERSION (run ./update.sh to review it)"
+        note "official latest is $LATEST_VERSION; installing repository-locked $PLUGIN_VERSION"
     elif [ "$LATEST_MD5" != "$PLUGIN_MD5" ]; then
         warn "official MD5 changed for locked $PLUGIN_VERSION; continuing only with the repository-pinned SHA-256"
     fi
@@ -216,7 +220,7 @@ ensure_locked_plugin() {
         cache_valid=1
     fi
 
-    check_latest_for_warning
+    check_latest_status
     if [ "$cache_valid" -eq 1 ]; then
         return 0
     fi
