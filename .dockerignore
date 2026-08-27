@@ -10,3 +10,4 @@ AUDIT.md
 install.sh
 update.sh
 uninstall.sh
+tests

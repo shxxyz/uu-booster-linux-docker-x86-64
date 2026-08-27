@@ -31,8 +31,12 @@ RUN expected="$(sed -n 's/^PLUGIN_SHA256=//p' /tmp/plugin.lock)" \
 
 COPY scripts/container-entrypoint.sh /usr/local/sbin/uu-entrypoint
 COPY scripts/healthcheck.sh /usr/local/sbin/uu-healthcheck
+COPY scripts/render-dns-overrides.sh /usr/local/sbin/render-dns-overrides
 
-RUN chmod 0755 /usr/local/sbin/uu-entrypoint /usr/local/sbin/uu-healthcheck
+RUN chmod 0755 \
+        /usr/local/sbin/uu-entrypoint \
+        /usr/local/sbin/uu-healthcheck \
+        /usr/local/sbin/render-dns-overrides
 
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/sbin/uu-entrypoint"]

@@ -40,6 +40,7 @@ services:
       UU_UPSTREAM_GATEWAY: ${UU_UPSTREAM_GATEWAY:?set UU_UPSTREAM_GATEWAY in .env}
       UU_UPSTREAM_DNS: ${UU_UPSTREAM_DNS:?set UU_UPSTREAM_DNS in .env}
       UU_SNAT_MODE: ${UU_SNAT_MODE:-off}
+      DNS_HOST_OVERRIDES: ${DNS_HOST_OVERRIDES:-}
     dns:
       - ${UU_UPSTREAM_DNS:?set UU_UPSTREAM_DNS in .env}
     volumes:

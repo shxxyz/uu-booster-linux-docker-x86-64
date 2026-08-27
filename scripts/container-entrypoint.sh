@@ -91,9 +91,23 @@ cp /opt/uu/uuplugin /opt/uu/xuplugin-guardian /opt/uu/uu.conf \
 chmod 0755 /tmp/uu/uuplugin /tmp/uu/xuplugin-guardian /tmp/uu/xtables-nft-multi
 chmod 0644 /tmp/uu/uu.conf
 
+dnsmasq_conf=/run/dnsmasq-overrides.conf
+if ! dns_override_count="$(
+    /usr/local/sbin/render-dns-overrides \
+        "$dnsmasq_conf" "$UU_LAN_SUBNET" "$UU_CONTAINER_IP"
+)"; then
+    die "invalid DNS_HOST_OVERRIDES"
+fi
+dnsmasq --test --conf-file="$dnsmasq_conf" >/dev/null 2>&1 \
+    || die "generated dnsmasq override configuration is invalid"
+unset DNS_HOST_OVERRIDES
+if [ "$dns_override_count" -gt 0 ]; then
+    log "loaded ${dns_override_count} exact DNS host override(s)"
+fi
+
 dnsmasq \
     --no-daemon \
-    --conf-file=/dev/null \
+    --conf-file="$dnsmasq_conf" \
     --no-resolv \
     --server="$UU_UPSTREAM_DNS" \
     --interface=br-lan \

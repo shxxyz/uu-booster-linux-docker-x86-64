@@ -37,7 +37,9 @@
 - 手机 UU App 能发现、绑定和控制插件；
 - PS5 把网关和 DNS 指向容器后能联网并实际加速。
 
-这些实机结果来自当时锁定的 `v14.2.2`。`v14.6.22` 已完成下载链、归档和闭源二进制的静态差异审计，但尚未在目标 Linux 服务器上完成运行、手机控制和 PS5 加速回归，不能把静态兼容判断当成实机结论。
+最初的完整验收使用 `v14.2.2`。2026-08-28，用户先执行 `docker compose down`，更新仓库后运行 `sudo ./install.sh --apply` 部署 `v14.6.22`；原有命名 volume 被复用，不需要重新登录或绑定。新版容器健康运行，手机 App 控制和 PS5 实际加速均正常。
+
+在新版已为 PS5 开启加速时，检查 nat `PREROUTING` 中目标端口 53 的规则没有输出，说明当时 UU 没有把该设备的 DNS 查询 DNAT 到其他服务器。此前看到的 `DOCKER_OUTPUT`、`127.0.0.11` 规则只服务于容器自身的 Docker 嵌入式 DNS，不属于 PS5 入站路径。
 
 尚未由用户报告或单独验收：
 
@@ -45,7 +47,7 @@
 - PS5 的具体 NAT 类型；
 - 宿主机或 Docker daemon 重启后的自动恢复；
 - `uninstall.sh --apply --purge` 的完整实机还原检查；
-- `v14.6.22` 及将来插件版本的实机兼容性；
+- 将来插件版本的实机兼容性；
 - 游戏设备 IPv6 是否被主路由关闭或仍可能绕行。
 
 不要把“本版本在这一套网络中成功”泛化为所有交换机、AP、网卡和内核都兼容。
@@ -197,6 +199,32 @@ Docker Engine 自身会在宿主机建立服务、`docker0` 和 Docker 防火墙
 - 健康检查验证 TUN、IPv4 转发、ICMP redirect 设置、`br-lan`、默认路由、dnsmasq PID 和 UU PID。
 
 如果未来改回 `dnsmasq --keep-in-foreground`，必须重新评估身份切换 capability，不能仅为了消除错误就增加 `--privileged`。
+
+### 精确 DNS 覆盖
+
+项目提供可选的 `DNS_HOST_OVERRIDES`，用于把少量精确 FQDN 映射到 `UU_LAN_SUBNET` 内的 IPv4。选择环境变量而不是额外 DNS sidecar、宿主 DNS 或原始 dnsmasq 配置挂载，是因为当前用途只有少量 Twitch 推流入口；这种方式不增加 MAC、宿主端口、目录挂载或新的长期状态。
+
+公开格式为逗号分隔的 `hostname=IPv4`：
+
+```text
+DNS_HOST_OVERRIDES=ingest.global-contribute.live-video.net=10.0.0.80
+```
+
+`install.sh --apply` 会先在宿主侧调用同一个独立 renderer 做 fail-fast 检查；renderer 也被复制进镜像，由入口脚本在 dnsmasq 启动前重新执行，避免绕过安装脚本直接启动容器时失去校验。处理规则如下：
+
+- 最多 32 项，不允许空项、空格、通配符、额外等号、单标签主机名或项目保留的 `netease-uu.invalid` 内部后缀；
+- 域名转为小写并移除一个末尾根点；每个 label 和总长度按普通 ASCII FQDN 边界验证；
+- IPv4 每个 octet 必须合法，拒绝未指定、loopback、组播和保留高地址；
+- 目标必须是 `UU_LAN_SUBNET` 内非网络地址、非广播地址，并且不能等于 `UU_CONTAINER_IP`；
+- 重复域名、冲突或任意非法输入都会让容器 fail closed，不会带着部分配置启动；
+- 只向 `/run/dnsmasq-overrides.conf` 写入经过验证的本地记录，文件位于容器 tmpfs；写完先由 `dnsmasq --test` 检查，再用于启动，并在拉起 dnsmasq 和闭源 UU 前从进程环境中删除原变量；
+- 没有列出的域名继续交给 `UU_UPSTREAM_DNS`，宿主机和不使用 UU DNS 的设备不受影响。
+
+不开放任意 dnsmasq directive，也不直接把环境变量拼接成 shell 命令。不能把原域名直接写成仅含 IPv4 的 `host-record`：镜像中的 dnsmasq 2.91 会把同名 AAAA 继续转发上游，可能产生 IPv6 绕行。也不能简单使用 `local=/原域名/`，因为它还会把该名字下的子域当成本地域。
+
+renderer 因此为每项生成一个 `dns-override-N.netease-uu.invalid` 本地主机记录，并把用户指定的原域名精确 CNAME 到这个保留 `.invalid` 名字；只有合成的 `netease-uu.invalid` 域被标为 local。2026-08-28 的 Debian trixie 包为 `dnsmasq-base 2.91-1+deb13u1`；用与 Debian `orig.tar.gz` SHA-1 一致的官方 2.91 源码在本机编译实测：原域名 A 响应包含 CNAME 和目标 IPv4，AAAA 只包含 CNAME、没有公网 IPv6，原域名的子域仍转发上游。验收必须复查这三项以及无关域名解析。
+
+`v14.6.22` 闭源二进制仍含有按设备动态插入 UDP 53 DNAT 的命令模板；当前实机未启用该规则不代表未来版本不会启用。每次插件升级后，应在 PS5 正在加速时检查 nat `PREROUTING`。如果出现针对该设备源地址的 53 端口 DNAT，内置 dnsmasq 可能被绕过；不要用规则顺序竞态修补，应改为同网段独立 DNS 地址，并让游戏主机直接查询它。
 
 ## 7. 官方插件获取与供应链边界
 
@@ -383,6 +411,8 @@ dnsmasq: failed to change group-id to root: Operation not permitted
 | `scripts/lib.sh` | 官方 API、下载、代理、hash、archive allowlist 和 Compose 封装 |
 | `scripts/container-entrypoint.sh` | 建立 `br-lan`、启动 DNS/插件、信号和重启监管 |
 | `scripts/healthcheck.sh` | 容器内运行状态检查 |
+| `scripts/render-dns-overrides.sh` | 严格验证 `DNS_HOST_OVERRIDES` 并生成只含精确记录的临时 dnsmasq 配置 |
+| `tests/test-dns-overrides.sh` | DNS renderer 的正常、边界、拒绝和原子写入回归测试 |
 | `.gitignore` / `.dockerignore` | 排除本地配置、闭源包、Mac App、日志和无关构建上下文 |
 | `LICENSE` | 本项目自有脚本和文档采用的 WTFPL Version 2 全文 |
 
@@ -419,8 +449,9 @@ UU 发布新版本时，不要直接运行 `update.sh --apply` 后宣告完成�
 ### 不需要目标机的静态检查
 
 ```sh
-sh -n scripts/container-entrypoint.sh scripts/healthcheck.sh
+sh -n scripts/container-entrypoint.sh scripts/healthcheck.sh scripts/render-dns-overrides.sh
 bash -n install.sh update.sh uninstall.sh scripts/lib.sh
+tests/test-dns-overrides.sh
 ./install.sh
 ./uninstall.sh
 ```
@@ -441,6 +472,7 @@ docker inspect --format '{{.State.Health.Status}}' netease-uu
 docker exec netease-uu ip address show br-lan
 docker exec netease-uu ip rule show
 docker exec netease-uu nft list ruleset
+docker exec netease-uu sh -c 'iptables-save -t nat | grep -E -- "^-A PREROUTING .*--dport 53" || true'
 ```
 
 验收必须覆盖：
@@ -448,6 +480,7 @@ docker exec netease-uu nft list ruleset
 - 容器为 `healthy` 且不反复重启；
 - `br-lan` 拥有预期 IP/MAC，默认路由正确；
 - dnsmasq 和 UU PID 均存活；
+- 每项 DNS 覆盖的 A、AAAA 和未覆盖域名查询行为符合预期；
 - 手机 App 可以发现和控制；
 - 游戏主机能联网并出现实际加速流量；
 - 宿主机仍使用原 IP、默认网关和 DNS；
@@ -482,4 +515,6 @@ docker exec netease-uu nft list ruleset
 - [Linux 6.12 macvlan 实现](https://github.com/torvalds/linux/blob/v6.12/drivers/net/macvlan.c)
 - [Linux 6.12 bridge 混杂模式管理](https://github.com/torvalds/linux/blob/v6.12/net/bridge/br_if.c)
 - [dnsmasq 官方手册](https://thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html)
+- [Debian trixie dnsmasq-base 2.91-1+deb13u1](https://packages.debian.org/stable/dnsmasq-base)
+- [Codming：PS5 无采集卡推流国内直播平台完整教程](https://codming.com/posts/ps5-streaming-to-chinese-platforms/)
 - [历史参考实现 dianqk/uuplugin](https://github.com/dianqk/uuplugin)

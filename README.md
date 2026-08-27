@@ -1,6 +1,6 @@
 # 网易 UU 路由器插件 Docker 封装
 
-在普通 x86_64 Linux 服务器上运行网易 UU 的 OpenWrt 路由器插件，不需要把服务器改造成主路由或旁路由。只有手动把网关和 DNS 指向 UU 容器的 PS5、Switch 等设备会经过加速；宿主机继续使用原来的网络。
+在普通 x86_64 Linux 服务器上运行网易 UU 的 OpenWrt 路由器插件。
 
 > 实机状态：已在 Arch Linux x86_64 服务器上完成安装，验证手机 UU App 可以发现和控制插件，并成功加速 PS5。
 >
@@ -52,8 +52,26 @@ cp .env.example .env
 | `UU_MAC_ADDRESS` | 为 UU 固定的、本局域网唯一的 MAC |
 | `UU_UPSTREAM_DNS` | 容器转发 DNS 查询时使用的服务器，通常填原主路由 |
 | `UU_SNAT_MODE` | 保持默认 `off`；仅在文末所述特殊故障下尝试 `masquerade` |
+| `DNS_HOST_OVERRIDES` | 可选，把少量精确域名解析到同一局域网内的指定 IPv4；留空即关闭 |
 | `DOWNLOAD_PROXY` | 可选，仅供插件包和镜像构建下载；不会传给运行中的 UU |
 
+### 可选：精确覆盖 DNS
+
+需要把特定域名指向局域网服务时，在 `.env` 中按 `域名=IPv4` 填写：
+
+```dotenv
+DNS_HOST_OVERRIDES=ingest.global-contribute.live-video.net=10.0.0.80
+```
+
+多个域名用逗号分隔，不要添加空格：
+
+```dotenv
+DNS_HOST_OVERRIDES=one.example.com=10.0.0.80,two.example.com=10.0.0.80
+```
+
+这里只接受最多 32 个完整、精确的域名，不支持通配符；目标必须是 `UU_LAN_SUBNET` 内的可用 IPv4，且不能是 UU 容器自身。未列出的查询仍转发给 `UU_UPSTREAM_DNS`，宿主机和没有使用 UU DNS 的局域网设备不受影响。
+
+例如按 [PS5 无采集卡推流教程](https://codming.com/posts/ps5-streaming-to-chinese-platforms/) 使用 PStream，且它与 UU 服务器同机、RTMP 端口映射为 `1935:1935` 时，应把 PS5 实际使用的 Twitch 推流服务器域名映射到服务器的局域网地址，而不是 Tailscale 域名。修改后运行 `sudo ./install.sh --apply` 重新创建容器；已有 UU volume 和登录绑定会保留。
 
 先运行只读计划，不会安装或修改任何内容：
 
