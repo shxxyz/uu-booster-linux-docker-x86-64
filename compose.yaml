@@ -38,11 +38,10 @@ services:
       UU_CONTAINER_IP: ${UU_CONTAINER_IP:?set UU_CONTAINER_IP in .env}
       UU_LAN_SUBNET: ${UU_LAN_SUBNET:?set UU_LAN_SUBNET in .env}
       UU_UPSTREAM_GATEWAY: ${UU_UPSTREAM_GATEWAY:?set UU_UPSTREAM_GATEWAY in .env}
-      UU_UPSTREAM_DNS: ${UU_UPSTREAM_DNS:?set UU_UPSTREAM_DNS in .env}
+      DNSMASQ_UPSTREAM: ${DNSMASQ_UPSTREAM:?set DNSMASQ_UPSTREAM in .env}
       UU_SNAT_MODE: ${UU_SNAT_MODE:-off}
-      DNS_HOST_OVERRIDES: ${DNS_HOST_OVERRIDES:-}
     dns:
-      - ${UU_UPSTREAM_DNS:?set UU_UPSTREAM_DNS in .env}
+      - ${DNSMASQ_UPSTREAM:?set DNSMASQ_UPSTREAM in .env}
     volumes:
       - uu_state:/usr/sbin/uu
     tmpfs:

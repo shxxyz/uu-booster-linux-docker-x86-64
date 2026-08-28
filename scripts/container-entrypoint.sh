@@ -22,7 +22,7 @@ is_ipv4() {
 
 is_ipv4 "${UU_CONTAINER_IP:-}" || die "invalid UU_CONTAINER_IP"
 is_ipv4 "${UU_UPSTREAM_GATEWAY:-}" || die "invalid UU_UPSTREAM_GATEWAY"
-is_ipv4 "${UU_UPSTREAM_DNS:-}" || die "invalid UU_UPSTREAM_DNS"
+is_ipv4 "${DNSMASQ_UPSTREAM:-}" || die "invalid DNSMASQ_UPSTREAM"
 printf '%s\n' "${UU_LAN_SUBNET:-}" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$' \
     || die "invalid UU_LAN_SUBNET"
 
@@ -91,25 +91,11 @@ cp /opt/uu/uuplugin /opt/uu/xuplugin-guardian /opt/uu/uu.conf \
 chmod 0755 /tmp/uu/uuplugin /tmp/uu/xuplugin-guardian /tmp/uu/xtables-nft-multi
 chmod 0644 /tmp/uu/uu.conf
 
-dnsmasq_conf=/run/dnsmasq-overrides.conf
-if ! dns_override_count="$(
-    /usr/local/sbin/render-dns-overrides \
-        "$dnsmasq_conf" "$UU_LAN_SUBNET" "$UU_CONTAINER_IP"
-)"; then
-    die "invalid DNS_HOST_OVERRIDES"
-fi
-dnsmasq --test --conf-file="$dnsmasq_conf" >/dev/null 2>&1 \
-    || die "generated dnsmasq override configuration is invalid"
-unset DNS_HOST_OVERRIDES
-if [ "$dns_override_count" -gt 0 ]; then
-    log "loaded ${dns_override_count} exact DNS host override(s)"
-fi
-
 dnsmasq \
     --no-daemon \
-    --conf-file="$dnsmasq_conf" \
+    --conf-file=/dev/null \
     --no-resolv \
-    --server="$UU_UPSTREAM_DNS" \
+    --server="$DNSMASQ_UPSTREAM" \
     --interface=br-lan \
     --listen-address="$UU_CONTAINER_IP" \
     --bind-dynamic \

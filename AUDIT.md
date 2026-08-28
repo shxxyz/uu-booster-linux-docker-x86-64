@@ -6,7 +6,7 @@
 
 ## 1. 当前状态快照
 
-记录日期：2026-08-28。
+记录日期：2026-08-29。
 
 ### 官方插件锁
 
@@ -39,7 +39,7 @@
 
 最初的完整验收使用 `v14.2.2`。2026-08-28，用户先执行 `docker compose down`，更新仓库后运行 `sudo ./install.sh --apply` 部署 `v14.6.22`；原有命名 volume 被复用，不需要重新登录或绑定。新版容器健康运行，手机 App 控制和 PS5 实际加速均正常。
 
-在新版已为 PS5 开启加速时，检查 nat `PREROUTING` 中目标端口 53 的规则没有输出，说明当时 UU 没有把该设备的 DNS 查询 DNAT 到其他服务器。此前看到的 `DOCKER_OUTPUT`、`127.0.0.11` 规则只服务于容器自身的 Docker 嵌入式 DNS，不属于 PS5 入站路径。
+2026-08-29 对完整 nftables ruleset 和 conntrack 事件重新检查后，确认 `v14.6.22` 在 PS5 正在加速时会把该设备的 UDP DNS 流量 DNAT 到 `8.8.8.8`。此前依据 `iptables -t nat` 的空 `PREROUTING` 得出“没有 DNS DNAT”的结论是错误的：该命令只显示 iptables-nft 兼容表，没有显示 UU 创建的原生 nftables `XU_ACC_DEVICE_*_nat` 表。
 
 尚未由用户报告或单独验收：
 
@@ -47,6 +47,7 @@
 - PS5 的具体 NAT 类型；
 - 宿主机或 Docker daemon 重启后的自动恢复；
 - `uninstall.sh --apply --purge` 的完整实机还原检查；
+- 移除精确 DNS 覆写后的目标机重建与基础解析回归；
 - 将来插件版本的实机兼容性；
 - 游戏设备 IPv6 是否被主路由关闭或仍可能绕行。
 
@@ -201,31 +202,21 @@ Docker Engine 自身会在宿主机建立服务、`docker0` 和 Docker 防火墙
 
 如果未来改回 `dnsmasq --keep-in-foreground`，必须重新评估身份切换 capability，不能仅为了消除错误就增加 `--privileged`。
 
-### 精确 DNS 覆盖
+### dnsmasq 上游与 UU 的设备级 DNS DNAT
 
-项目提供可选的 `DNS_HOST_OVERRIDES`，用于把少量精确 FQDN 映射到 `UU_LAN_SUBNET` 内的 IPv4。选择环境变量而不是额外 DNS sidecar、宿主 DNS 或原始 dnsmasq 配置挂载，是因为当前用途只有少量 Twitch 推流入口；这种方式不增加 MAC、宿主端口、目录挂载或新的长期状态。
+游戏主机在本项目的正常配置中把 DNS 指向 `UU_CONTAINER_IP`，所以容器仍需在该地址的 UDP/TCP 53 端口运行 dnsmasq。`DNSMASQ_UPSTREAM` 只指定 dnsmasq 的普通转发上游，同时作为 Compose 为容器自身配置的 DNS；它不是 UU 的配置项，也不能约束闭源插件随后写入的规则。
 
-公开格式为逗号分隔的 `hostname=IPv4`：
+2026-08-29 在 `v14.6.22`、PS5 地址为 `10.0.0.11` 且正在加速时取得以下证据：
 
-```text
-DNS_HOST_OVERRIDES=ingest.global-contribute.live-video.net=10.0.0.80
-```
+- `iptables -t nat -vnL PREROUTING` 为空，但完整 `nft -a list ruleset` 中存在独立的 `table ip XU_ACC_DEVICE_10.0.0.11_nat`；因此只查看 iptables-nft 兼容表会漏报；
+- 设备级 mangle 表按 `iifname "br-lan" ip saddr 10.0.0.11 udp dport 53` 设置加速 mark，计数器已有流量；
+- 设备级 nat 表按同一入口、源地址和 UDP/53 匹配，并执行 `dnat to 8.8.8.8`，现场计数器已有 `967` 个包；
+- `conntrack -E` 显示原始方向是 `src=10.0.0.11 dst=10.0.0.10 ... dport=53`，回复方向却是 `src=8.8.8.8 dst=10.0.0.11 ... sport=53`，直接证明查询目的地址被透明改写；
+- 同一设备的 IPv6 表还按源 MAC 丢弃 UDP/53，但现场没有观察到对应的 IPv6 DNS DNAT。
 
-`install.sh --apply` 会先在宿主侧调用同一个独立 renderer 做 fail-fast 检查；renderer 也被复制进镜像，由入口脚本在 dnsmasq 启动前重新执行，避免绕过安装脚本直接启动容器时失去校验。处理规则如下：
+因此，只要这条规则处于活动状态，原本发往容器 dnsmasq 的 UDP 查询就会在进入本地 DNS 进程前被改写，dnsmasq 中的精确域名记录无法可靠生效。项目曾为 Twitch/PStream 重定向需求提供 `DNS_HOST_OVERRIDES`，但其成立前提已被现场数据否定；该变量、renderer 和测试于 2026-08-29 移除，`UU_UPSTREAM_DNS` 同时更名为语义更窄的 `DNSMASQ_UPSTREAM`。
 
-- 最多 32 项，不允许空项、空格、通配符、额外等号、单标签主机名或项目保留的 `netease-uu.invalid` 内部后缀；
-- 域名转为小写并移除一个末尾根点；每个 label 和总长度按普通 ASCII FQDN 边界验证；
-- IPv4 每个 octet 必须合法，拒绝未指定、loopback、组播和保留高地址；
-- 目标必须是 `UU_LAN_SUBNET` 内非网络地址、非广播地址，并且不能等于 `UU_CONTAINER_IP`；
-- 重复域名、冲突或任意非法输入都会让容器 fail closed，不会带着部分配置启动；
-- 只向 `/run/dnsmasq-overrides.conf` 写入经过验证的本地记录，文件位于容器 tmpfs；写完先由 `dnsmasq --test` 检查，再用于启动，并在拉起 dnsmasq 和闭源 UU 前从进程环境中删除原变量；
-- 没有列出的域名继续交给 `UU_UPSTREAM_DNS`，宿主机和不使用 UU DNS 的设备不受影响。
-
-不开放任意 dnsmasq directive，也不直接把环境变量拼接成 shell 命令。不能把原域名直接写成仅含 IPv4 的 `host-record`：镜像中的 dnsmasq 2.91 会把同名 AAAA 继续转发上游，可能产生 IPv6 绕行。也不能简单使用 `local=/原域名/`，因为它还会把该名字下的子域当成本地域。
-
-renderer 因此为每项生成一个 `dns-override-N.netease-uu.invalid` 本地主机记录，并把用户指定的原域名精确 CNAME 到这个保留 `.invalid` 名字；只有合成的 `netease-uu.invalid` 域被标为 local。2026-08-28 的 Debian trixie 包为 `dnsmasq-base 2.91-1+deb13u1`；用与 Debian `orig.tar.gz` SHA-1 一致的官方 2.91 源码在本机编译实测：原域名 A 响应包含 CNAME 和目标 IPv4，AAAA 只包含 CNAME、没有公网 IPv6，原域名的子域仍转发上游。验收必须复查这三项以及无关域名解析。
-
-`v14.6.22` 闭源二进制仍含有按设备动态插入 UDP 53 DNAT 的命令模板；当前实机未启用该规则不代表未来版本不会启用。每次插件升级后，应在 PS5 正在加速时检查 nat `PREROUTING`。如果出现针对该设备源地址的 53 端口 DNAT，内置 dnsmasq 可能被绕过；不要用规则顺序竞态修补，应改为同网段独立 DNS 地址，并让游戏主机直接查询它。
+不要通过抢 nftables hook 优先级、循环删除 UU 规则或与插件竞态来恢复覆写，这会改变闭源加速数据路径且难以稳定验证。如果需要自定义或分流 DNS，应在同一 LAN 上提供另一个独立 IP，并让游戏主机直接把 DNS 指向该地址，使同网段 DNS 流量在二层直达而不进入 UU 网关；仍需在目标网络实测，因为设备子网、IPv6 和主机网络设置都可能改变路径。
 
 ## 7. 官方插件获取与供应链边界
 
@@ -411,8 +402,6 @@ dnsmasq: failed to change group-id to root: Operation not permitted
 | `scripts/lib.sh` | 官方 API、下载、代理、hash、archive allowlist 和 Compose 封装 |
 | `scripts/container-entrypoint.sh` | 建立 `br-lan`、启动 DNS/插件、信号和重启监管 |
 | `scripts/healthcheck.sh` | 容器内运行状态检查 |
-| `scripts/render-dns-overrides.sh` | 严格验证 `DNS_HOST_OVERRIDES` 并生成只含精确记录的临时 dnsmasq 配置 |
-| `tests/test-dns-overrides.sh` | DNS renderer 的正常、边界、拒绝和原子写入回归测试 |
 | `.gitignore` / `.dockerignore` | 排除本地配置、闭源包、Mac App、日志和无关构建上下文 |
 | `LICENSE` | 本项目自有脚本和文档采用的 WTFPL Version 2 全文 |
 
@@ -450,9 +439,8 @@ UU 发布新版本时，版本 bump 必须作为一次独立、可复核的仓�
 ### 不需要目标机的静态检查
 
 ```sh
-sh -n scripts/container-entrypoint.sh scripts/healthcheck.sh scripts/render-dns-overrides.sh
+sh -n scripts/container-entrypoint.sh scripts/healthcheck.sh
 bash -n install.sh uninstall.sh scripts/lib.sh
-tests/test-dns-overrides.sh
 ./install.sh
 ./uninstall.sh
 ```
@@ -473,7 +461,6 @@ docker inspect --format '{{.State.Health.Status}}' netease-uu
 docker exec netease-uu ip address show br-lan
 docker exec netease-uu ip rule show
 docker exec netease-uu nft list ruleset
-docker exec netease-uu sh -c 'iptables-save -t nat | grep -E -- "^-A PREROUTING .*--dport 53" || true'
 ```
 
 验收必须覆盖：
@@ -481,7 +468,8 @@ docker exec netease-uu sh -c 'iptables-save -t nat | grep -E -- "^-A PREROUTING 
 - 容器为 `healthy` 且不反复重启；
 - `br-lan` 拥有预期 IP/MAC，默认路由正确；
 - dnsmasq 和 UU PID 均存活；
-- 每项 DNS 覆盖的 A、AAAA 和未覆盖域名查询行为符合预期；
+- 未被 UU 设备级规则改写的查询能通过 `DNSMASQ_UPSTREAM` 正常解析；
+- 加速期间从完整 nftables ruleset 和 conntrack 核对游戏设备的实际 DNS 目标，不能依据空的 iptables-nft `PREROUTING` 下结论；
 - 手机 App 可以发现和控制；
 - 游戏主机能联网并出现实际加速流量；
 - 宿主机仍使用原 IP、默认网关和 DNS；

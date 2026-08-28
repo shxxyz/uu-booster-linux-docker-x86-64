@@ -67,9 +67,8 @@ subnet="$(env_value UU_LAN_SUBNET)"
 gateway="$(env_value UU_UPSTREAM_GATEWAY)"
 container_ip="$(env_value UU_CONTAINER_IP)"
 mac="$(env_value UU_MAC_ADDRESS)"
-dns="$(env_value UU_UPSTREAM_DNS)"
+dnsmasq_upstream="$(env_value DNSMASQ_UPSTREAM 2>/dev/null || true)"
 snat="$(env_value UU_SNAT_MODE)"
-dns_overrides="$(env_value DNS_HOST_OVERRIDES 2>/dev/null || true)"
 
 [[ "$parent" =~ ^[a-zA-Z0-9_.:-]+$ ]] || die "invalid UU_PARENT_INTERFACE"
 [ -e "/sys/class/net/$parent" ] || die "interface $parent does not exist"
@@ -77,19 +76,11 @@ ip link show "$parent" | grep -q 'UP' || die "interface $parent is not up"
 [[ "$subnet" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]] || die "invalid UU_LAN_SUBNET"
 [[ "$gateway" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "invalid UU_UPSTREAM_GATEWAY"
 [[ "$container_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "invalid UU_CONTAINER_IP"
-[[ "$dns" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || die "invalid UU_UPSTREAM_DNS"
+[[ "$dnsmasq_upstream" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] \
+    || die "invalid or missing DNSMASQ_UPSTREAM"
 [[ "$mac" =~ ^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$ ]] || die "invalid UU_MAC_ADDRESS"
 [[ "$snat" == "off" || "$snat" == "masquerade" ]] || die "UU_SNAT_MODE must be off or masquerade"
 [ "$container_ip" != "$gateway" ] || die "container IP must differ from the upstream gateway"
-
-dns_config_check="$(mktemp "${TMPDIR:-/tmp}/netease-uu-dns-config.XXXXXX")"
-if ! DNS_HOST_OVERRIDES="$dns_overrides" \
-    "$ROOT/scripts/render-dns-overrides.sh" \
-        "$dns_config_check" "$subnet" "$container_ip" >/dev/null; then
-    rm -f "$dns_config_check"
-    die "invalid DNS_HOST_OVERRIDES"
-fi
-rm -f "$dns_config_check"
 
 ip route get "$gateway" | grep -Fq "dev ${parent}" \
     || die "upstream gateway $gateway is not reachable through $parent"

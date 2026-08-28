@@ -46,34 +46,11 @@ cp .env.example .env
 | `UU_UPSTREAM_GATEWAY` | 原主路由地址，例如 `10.0.0.1` |
 | `UU_CONTAINER_IP` | 为 UU 保留的未占用地址，例如 `10.0.0.2` |
 | `UU_MAC_ADDRESS` | 为 UU 固定的、本局域网唯一的 MAC |
-| `UU_UPSTREAM_DNS` | 容器转发 DNS 查询时使用的服务器，通常填原主路由 |
+| `DNSMASQ_UPSTREAM` | 容器内 dnsmasq 的上游，通常填原主路由 |
 | `UU_SNAT_MODE` | 保持默认 `off`；仅在文末所述特殊故障下尝试 `masquerade` |
-| `DNS_HOST_OVERRIDES` | 可选，把少量精确域名解析到同一局域网内的指定 IPv4。留空即关闭 |
 | `DOWNLOAD_PROXY` | 可选，仅供插件包和镜像构建下载；不会传给运行中的 UU |
 
-
-<details>
-<summary>可选：DNS 覆写</summary>
-需要把特定域名指向局域网服务时，在 `.env` 中按 `域名=IPv4` 填写：
-
-```dotenv
-DNS_HOST_OVERRIDES=ingest.global-contribute.live-video.net=10.0.0.42
-```
-
-多个域名用逗号分隔，不要添加空格：
-
-```dotenv
-DNS_HOST_OVERRIDES=one.example.com=10.0.0.42,two.example.com=10.0.0.42
-```
-
-- 只接受最多 32 个完整、精确的域名
-- 不支持通配符
-- 目标必须是 `UU_LAN_SUBNET` 内的可用 IPv4，且不能是 UU 容器自身
-- 未列出的查询仍转发给 `UU_UPSTREAM_DNS`
-- 宿主机和没有使用 UU DNS 的局域网设备不受影响
-
-> 猜你想看：[PS5 无采集卡推流教程](https://codming.com/posts/ps5-streaming-to-chinese-platforms/)
-</details>
+`DNSMASQ_UPSTREAM` 只配置本封装启动的 dnsmasq 和容器自身的 DNS。UU 开启加速后，闭源插件可能把正在加速设备的 UDP DNS 流量改写到它指定的服务器，因此该变量不能强制指定游戏主机最终使用的 DNS，也不是 UU 的自定义 DNS 配置入口。
 
 安装脚本默认不会安装或修改任何内容：
 
@@ -137,8 +114,6 @@ docker compose start uu
 ## 更新项目与 UU 插件
 
 本项目不提供自动追踪或切换上游版本的命令。每个 UU 插件版本都必须先完成审计，再通过新的仓库提交更新 `plugin.lock`。
-
-更新本地项目并重新部署：
 
 ```sh
 git pull --ff-only
