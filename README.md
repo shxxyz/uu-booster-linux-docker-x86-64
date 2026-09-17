@@ -46,11 +46,11 @@ cp .env.example .env
 | `UU_UPSTREAM_GATEWAY` | 原主路由地址，例如 `10.0.0.1` |
 | `UU_CONTAINER_IP` | 为 UU 保留的未占用地址，例如 `10.0.0.2` |
 | `UU_MAC_ADDRESS` | 为 UU 固定的、本局域网唯一的 MAC |
-| `DNSMASQ_UPSTREAM` | 容器内 dnsmasq 的上游，通常填原主路由 |
+| `DNSMASQ_UPSTREAM` | 容器内 dnsmasq 的上游*，通常填原主路由 |
 | `UU_SNAT_MODE` | 保持默认 `off`；仅在文末所述特殊故障下尝试 `masquerade` |
 | `DOWNLOAD_PROXY` | 可选，仅供插件包和镜像构建下载；不会传给运行中的 UU |
 
-`DNSMASQ_UPSTREAM` 只配置本封装启动的 dnsmasq 和容器自身的 DNS。UU 开启加速后，闭源插件可能把正在加速设备的 UDP DNS 流量改写到它指定的服务器，因此该变量不能强制指定游戏主机最终使用的 DNS，也不是 UU 的自定义 DNS 配置入口。
+\* `DNSMASQ_UPSTREAM` 只配置本封装启动的 dnsmasq 和容器自身的 DNS。UU 开启加速后，闭源插件可能把正在加速设备的 UDP DNS 流量改写到它指定的服务器，因此该变量不能强制指定游戏主机最终使用的 DNS，也不是 UU 的自定义 DNS 配置入口。
 
 安装脚本默认不会安装或修改任何内容：
 
@@ -159,7 +159,10 @@ docker compose logs --tail 200 uu
 
 ### UU App 找不到插件
 
-检查手机是否与服务器在同一局域网、手机临时网关和 DNS 是否都指向 `UU_CONTAINER_IP`，以及 AP 是否启用了客户端隔离。还需确认交换机或主路由接受服务器端口后的额外 MAC。
+检查手机是否与服务器在同一局域网、手机临时网关和 DNS 是否都指向 `UU_CONTAINER_IP`，以及 AP 是否启用了客户端隔离*。还需确认交换机或主路由接受服务器端口后的额外 MAC**。
+
+\* 指通过有线接入的设备与通过无线接入的设备之间的隔离。  
+\** 大部分路由器都支持。
 
 ### 宿主机无法 ping 容器
 
