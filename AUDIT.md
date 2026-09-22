@@ -6,18 +6,19 @@
 
 ## 1. 当前状态快照
 
-记录日期：2026-08-29。
+记录日期：2026-09-22。
 
 ### 官方插件锁
 
 - 类型：`openwrt-x86_64`
-- 版本：`v14.6.22`
-- 固定下载地址：`https://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.6.22/uu.tar.gz`
-- 官方 API MD5：`a35ec2319472d54620af047d05d41640`
-- 本项目锁定 SHA-256：`a1357032179379a21dc38d0c0fe6da5c35967c8c85920b924c8200d2530b8533`
-- 大小：`3133127` 字节
-- 官方 API 返回的无 key 地址使用 HTTP；同一路径的 HTTP、证书有效的 HTTPS 和带 key 主地址均实测返回相同文件，大小、MD5、SHA-256 和归档结构与锁一致。本项目固定其 HTTPS 形式。
-- 本次版本锁提交完成时，官方最新版本和 MD5 与 `plugin.lock` 一致。
+- 版本：`v14.9.4`
+- 固定下载地址：`https://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.9.4/uu.tar.gz`
+- 官方 API MD5：`760d0bead1a0fb8d459ced0f9ed087ac`
+- 本项目锁定 SHA-256：`73e2eea46eb2d3cd3c34bf3945e1572efee5718b406014258d46e65e041b6dbc`
+- 大小：`3142525` 字节
+- 官方 API 返回的无 key 地址使用 HTTP；本次实测其证书有效的 HTTPS 形式与带 key 的 HTTPS 主地址返回相同文件，MD5、SHA-256、大小和归档结构与锁一致。本项目固定 HTTPS 形式；本次未重复测试明文 HTTP。
+- 本次审计查询时，官方最新版本和 MD5 与以上锁一致。
+- `v14.9.4` 通过包完整性和静态兼容性审计；尚未完成 Docker 构建、目标机启动和手机／游戏主机验收。下面的已验证运行结果属于旧版，不能当作新版的验收结果。
 
 ### 实机环境与结果
 
@@ -29,7 +30,7 @@
 - 原主路由 `10.0.0.1`
 - PS5 与手机通过 Wi-Fi 接入同一局域网，服务器走有线
 
-已经实机确认：
+旧版已经实机确认：
 
 - Docker 镜像可构建，容器可健康运行；
 - 当前网络允许服务器物理端口后的额外 macvlan MAC；
@@ -48,6 +49,7 @@
 - 宿主机或 Docker daemon 重启后的自动恢复；
 - `uninstall.sh --apply --purge` 的完整实机还原检查；
 - 移除精确 DNS 覆写后的目标机重建与基础解析回归；
+- 当前锁定 `v14.9.4` 的镜像构建、容器健康、手机控制和 PS5/Switch 加速；
 - 将来插件版本的实机兼容性；
 - 游戏设备 IPv6 是否被主路由关闭或仍可能绕行。
 
@@ -234,7 +236,7 @@ https://router.uu.163.com/api/plugin?type=openwrt-x86_64
 http://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.6.22/uu.tar.gz
 ```
 
-对这个精确 HTTP 地址及其 HTTPS 形式分别进行了完整 GET：两者都返回 200，下载 `3133127` 字节，MD5、SHA-256、tar 顶层和带 key 主地址逐字节一致。新 `nieapps.com` 主机的 HTTPS 证书校验正常，因此 `plugin.lock` 固定同一路径的 HTTPS 形式，不沿用 API 返回的明文协议。历史 `v14.2.2` 所在的 `uurouter.gdl04.netease.com` 与证书不匹配，旧版锁只能使用 HTTP；这个限制不再适用于当前主机。
+当时对这个精确 HTTP 地址及其 HTTPS 形式分别进行了完整 GET：两者都返回 200，下载 `3133127` 字节，MD5、SHA-256、tar 顶层和带 key 主地址逐字节一致。新 `nieapps.com` 主机的 HTTPS 证书校验正常，因此当时的 `plugin.lock` 固定同一路径的 HTTPS 形式，不沿用 API 返回的明文协议。历史 `v14.2.2` 所在的 `uurouter.gdl04.netease.com` 与证书不匹配，旧版锁只能使用 HTTP；这个限制不再适用于当前主机。2026-09-22 的 `v14.9.4` 仍使用同一域名和 API 字段格式，现有解析器及 URL allowlist 无需改动。
 
 普通安装的下载顺序和约束是：
 
@@ -258,7 +260,7 @@ xuplugin-guardian
 
 三个可执行文件都是静态链接 Linux x86-64 ELF；`uuplugin` 和 guardian 已 strip。
 
-当前 `v14.6.22` 的固定无 key 地址使用证书有效的 HTTPS，仓库中预先记录的 SHA-256 仍是普通安装的内容完整性锚；传输内容不匹配时不会执行。制作新版本锁提交时尚无预先可信的新 SHA-256，首次信任仍依赖 UU 官方 HTTPS API 提供的 MD5、随后计算的 SHA-256 和人工审计；官方没有可验证的代码签名，因此不能证明闭源程序本身安全。历史 `v14.2.2` 无 key 主机只能使用 HTTP，已不再是当前锁的传输边界。
+当前 `v14.9.4` 的固定无 key 地址使用证书有效的 HTTPS，仓库中预先记录的 SHA-256 仍是普通安装的内容完整性锚；传输内容不匹配时不会执行。制作新版本锁提交时尚无预先可信的新 SHA-256，首次信任仍依赖 UU 官方 HTTPS API 提供的 MD5、随后计算的 SHA-256 和人工审计；官方没有可验证的代码签名，因此不能证明闭源程序本身安全。历史 `v14.2.2` 无 key 主机只能使用 HTTP，已不再是当前锁的传输边界。
 
 仓库不提供自动更新锁文件的脚本。上游版本只能在独立工作区中下载和审计，由维护者手动更新 `plugin.lock`、适配代码与本文件，并作为一个可复核的提交发布。目标机上的 `install.sh` 无论官方版本多新，都只能安装当前 checkout 已锁定的包。
 
@@ -269,6 +271,33 @@ xuplugin-guardian
 - `uu.conf` 仅把版本从 `v14.2.2` 改为 `v14.6.22`；`uuplugin` 发生变化。`xtables-nft-multi` 和 `xuplugin-guardian` 与旧包逐字节一致，SHA-256 分别仍为 `9cd422fa3bc89b5ef855faba274cfa01ecd4478a64171dd95bf78ef5bd1e957f` 和 `0353279bc1c2542a5fac0bfa9f6dc8b71e94cdae17b70db23241348f8d7af23e`。
 - 三个可执行文件仍是静态链接的 Linux x86-64 ELF。针对新 `uuplugin` 的命令、路径和设备字符串检查仍可见 `/dev/net/tun`、`br-lan`、iproute2 与 iptables/nftables 假设，未发现需要新增宿主挂载、设备节点、系统包或 capability 的证据；新增的部分 TCP DNAT/INPUT 规则模板仍在既有 `NET_ADMIN` 和 netfilter 范围内。
 - 没有找到网易发布的该版本公开 changelog。以上只能支持“现有容器边界大概率仍兼容”的静态判断，目标服务器上的容器健康、手机控制、PS5 加速、DNS/netfilter 规则和宿主机不受影响仍必须实测。
+
+### `v14.9.4` 升级审计（2026-09-22）
+
+静态审计未发现与现有 Docker 封装不兼容的变化，可更新 `plugin.lock`；未发现需要修改镜像依赖、capability、挂载或入口脚本的证据。由于审计机为 macOS 且没有 Docker CLI，本次没有构建或执行新版，也没有目标机实测，运行兼容性仍待用户验收。
+
+**下载与包结构：** 官方 API 返回 `v14.9.4` 和 MD5 `760d0bead1a0fb8d459ced0f9ed087ac`。分别完整下载签名 HTTPS 主地址及本节开头锁定的无 key HTTPS 地址，二者内容一致，大小 `3142525` 字节，SHA-256 `73e2eea46eb2d3cd3c34bf3945e1572efee5718b406014258d46e65e041b6dbc`。没有扩大 URL allowlist。tar 仍仅含四个普通文件，没有额外路径或链接。
+
+| 文件 | 相对 `v14.6.22` 的变化 |
+| --- | --- |
+| `uu.conf` | 仅 `version=v14.6.22` → `version=v14.9.4`；`log_level=info` 不变 |
+| `uuplugin` | `5620208` → `5636592` 字节，增加 `16384` 字节；新 SHA-256 为 `caaa7935cb3bb5d514d3ce7040a9f8520a817ee23dceb78c79c36b16fb690044` |
+| `xuplugin-guardian` | 逐字节不变；SHA-256 仍为 `0353279bc1c2542a5fac0bfa9f6dc8b71e94cdae17b70db23241348f8d7af23e` |
+| `xtables-nft-multi` | 逐字节不变；SHA-256 仍为 `9cd422fa3bc89b5ef855faba274cfa01ecd4478a64171dd95bf78ef5bd1e957f` |
+
+**主程序的变化线索：** 没有找到该版本的官方公开 changelog。以下来自旧包 SHA-256 核验后的逐文件比较、ELF `.rodata` 字符串差集及简单混淆日志解码，属于静态线索，不能据此确定服务端开关、默认行为、修复范围或性能收益。
+
+- 新增主链路／TCP channel 的 QUIC 和混淆配置：`quic_config`、`tun2proxy_mainlink_quic`、`tun2proxy_tcpchannel_quic`、对应 `_obfs` 开关、`quic_max_streams`、`quic_max_stream_data`、`quic_idle_timeout_ms`；新增 `select_proto` 和 `proto fallback` 日志，表明传输协议选择／回退逻辑有所扩展。不是本封装新增的环境变量，不应直接写入 `.env` 并假定生效。
+- 新增 `check_and_kill_slow_conns`、`slow_conn_kill_speed/duration/cnts` 等键，以及按速度窗口清理慢 TCP 通道的日志；网络类型切换日志新增清理旧测速记录的描述。
+- TCP／域名质量上报格式加入 `proto`、`srv_ip`、`srv_port`、`conn_ms`、`conn_ok` 等字段，上报标识改为 `quality_report_proxy_v2` / `quality_report_tproxy_v2`；域名／URI 日志新增长度限制。
+- 主链路发送相关日志改为 pending buffer / SSL write 错误，TCP 通道新增 client/server half-close 日志，提示发送缓冲和连接关闭处理有变化。
+- 部分内置 IPv4 字符串变化；不能仅凭这些地址判断节点覆盖或游戏支持范围。构建时间字符串由 `2026-08-24 13:17:12` 改为 `2026-09-16 13:09:43`，它不是经过认证的发布日期。
+
+**封装兼容性依据：** 三个可执行文件仍为静态链接 Linux x86-64 ELF；`uuplugin` 无动态加载器／共享库依赖，编译器标识仍为 OpenWrt GCC 7.3.0。比较 `.rodata` 中匹配网络命令、模块加载和系统路径的 175 条字符串，集合完全一致；`/dev/net/tun`、`br-lan`、`/var/run/uuplugin.pid`、`/usr/sbin/uu/`、`.sn`、`.uuplugin_uuid`、`uu.update`、`uu.uninstall` 均保留。iptables/nftables DNS DNAT 模板仍在，不能把此次升级当作已取消 DNS 劫持。字符串不变只支持“未发现接口变化”，不能证明机器码逻辑或运行时资源需求完全不变。
+
+**复核方法：** 从 ELF section headers 定位 `.rodata`，提取长度至少 4 的连续 ASCII 可打印字符串，按集合比较，排除 `.text` 中指令字节误识别产生的噪声；新包新增 75 条、移除 52 条。175 条子集的筛选式为 `iptables|ip6tables|nft |ip rule|ip route|br-lan|/dev/|/proc/|/sys/|/usr/|/etc/|/tmp/|/var/|uu\.update|uu\.uninstall|modprobe|insmod|mount |sysctl`。部分以 `/` 包裹的日志按 95 个可打印 ASCII 字符循环减 13 后可读，例如恢复为 `quic env mainlink:%d tcpchannel:%d ...`；这只是日志混淆解码，不是完整反编译。
+
+**验证与复查：** 本次检查官方 API 解析、锁字段、MD5/SHA-256/大小、tar allowlist、ELF 静态属性、Shell 语法、Compose YAML 语法和安装／卸载 dry-run；还将缓存路径指向独立 `tmp/` 目录，直接调用现有 `ensure_locked_plugin`，实际完成从官方 API 查询到新锁包下载、全项校验的流程。没有执行 `install.sh --apply` 或新版二进制。目标机更新后必须检查健康状态、手机控制、PS5/Switch 加速，并在加速期间查看完整 `nft -a list ruleset`；尤其留意新传输策略的连通性、慢连接重试和实际 DNS 目标。绑定卷沿用原有配置，保留旧版本提交以便重新构建回退。
 
 ## 8. 官方 OpenWrt 安装器审计
 

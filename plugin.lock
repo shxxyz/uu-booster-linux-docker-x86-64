@@ -1,7 +1,7 @@
 # 由经审计的仓库提交管理。固定官方无 key 备用 URL，并同时校验 MD5、SHA-256 与大小。
 PLUGIN_TYPE=openwrt-x86_64
-PLUGIN_VERSION=v14.6.22
-PLUGIN_URL=https://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.6.22/uu.tar.gz
-PLUGIN_MD5=a35ec2319472d54620af047d05d41640
-PLUGIN_SHA256=a1357032179379a21dc38d0c0fe6da5c35967c8c85920b924c8200d2530b8533
-PLUGIN_SIZE=3133127
+PLUGIN_VERSION=v14.9.4
+PLUGIN_URL=https://uurouter-19.gdl.nieapps.com/uuplugin/openwrt-x86_64/v14.9.4/uu.tar.gz
+PLUGIN_MD5=760d0bead1a0fb8d459ced0f9ed087ac
+PLUGIN_SHA256=73e2eea46eb2d3cd3c34bf3945e1572efee5718b406014258d46e65e041b6dbc
+PLUGIN_SIZE=3142525
