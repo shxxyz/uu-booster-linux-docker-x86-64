@@ -69,6 +69,11 @@ container_ip="$(env_value UU_CONTAINER_IP)"
 mac="$(env_value UU_MAC_ADDRESS)"
 dnsmasq_upstream="$(env_value DNSMASQ_UPSTREAM 2>/dev/null || true)"
 snat="$(env_value UU_SNAT_MODE)"
+uu_log_level="$(env_value UU_LOG_LEVEL 2>/dev/null || true)"
+case "${uu_log_level:-info}" in
+    debug|info|warning|fatal) ;;
+    *) die "UU_LOG_LEVEL must be debug, info, warning, or fatal" ;;
+esac
 
 [[ "$parent" =~ ^[a-zA-Z0-9_.:-]+$ ]] || die "invalid UU_PARENT_INTERFACE"
 [ -e "/sys/class/net/$parent" ] || die "interface $parent does not exist"

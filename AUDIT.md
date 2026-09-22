@@ -204,6 +204,16 @@ Docker Engine 自身会在宿主机建立服务、`docker0` 和 Docker 防火墙
 
 如果未来改回 `dnsmasq --keep-in-foreground`，必须重新评估身份切换 capability，不能仅为了消除错误就增加 `--privileged`。
 
+### UU 内置日志级别（v14.9.4，2026-09-22）
+
+`.env` 提供 `UU_LOG_LEVEL`，Compose 未设置或设为空时默认 `info`。安装器和容器入口都严格接受 `debug`、`info`、`warning`、`fatal` 四个小写值。入口只替换 `/tmp/uu/uu.conf` 中的 `log_level`，保留版本及其他原有字段；镜像中 `/opt/uu/uu.conf`、原始 tar 和 `plugin.lock` 不变。若将来上游配置中没有或重复出现该字段，入口直接报错，不能静默启动一个没有正确应用日志设置的版本。
+
+以上取值不是从其他日志框架类推而来：对锁定 SHA-256 的主程序进行静态交叉引用检查，`config_handle.cpp` 的配置解析路径在 `0x4649c2` 比较 `log_level`，在 `0x464d76` 调用 `0x4611b0` 的级别解析函数；该函数构建 `debug=0`、`info=1`、`warning=2`、`fatal=3` 映射，未知值回退到 `info=1`。因此封装拒绝 `trace`、`warn`、`error`、`off` 等未支持值，不提供虚假的“完全关闭”开关。日志实现还有 `[FORCE]` 标签及丢弃／限流相关路径，不能声称 `fatal` 会使所有输出静默，或 `debug` 保证得到所有模块的所有日志。
+
+输出路径方面，`0x45fbf0` 的日志分发检查回调；无回调分支在 `0x46001e` 使用 C++ 输出流，经字符串写入、换行和 flush 路径输出。入口启动 `./uuplugin ./uu.conf` 时继承 stdout/stderr，没有重定向到 `/dev/null`；Docker 可收集这些输出，无需增加 TTY、日志文件挂载或后台 tail。该静态路径支持使用 `docker compose logs` 观察，但不能保证插件所有内部／服务端日志都进入这个输出流，也不能证明服务端不会修改日志策略。
+
+本地只验证配置生成、默认值和非法输入处理；当前没有 Docker/Linux 运行环境，尚未实测 `info` 与 `debug` 的实际日志量差异。目标机需在重建后确认启动提示中的级别、`/tmp/uu/uu.conf` 的值及手机开启加速时的实际输出。修改 `.env` 后必须重新创建容器，单纯 restart 不会更新环境。debug 可能包含账号、设备、IP、域名或其他诊断数据，排障后建议恢复默认级别。
+
 ### dnsmasq 上游与 UU 的设备级 DNS DNAT
 
 游戏主机在本项目的正常配置中把 DNS 指向 `UU_CONTAINER_IP`，所以容器仍需在该地址的 UDP/TCP 53 端口运行 dnsmasq。`DNSMASQ_UPSTREAM` 只指定 dnsmasq 的普通转发上游，同时作为 Compose 为容器自身配置的 DNS；它不是 UU 的配置项，也不能约束闭源插件随后写入的规则。

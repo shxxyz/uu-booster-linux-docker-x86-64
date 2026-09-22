@@ -40,6 +40,7 @@ services:
       UU_UPSTREAM_GATEWAY: ${UU_UPSTREAM_GATEWAY:?set UU_UPSTREAM_GATEWAY in .env}
       DNSMASQ_UPSTREAM: ${DNSMASQ_UPSTREAM:?set DNSMASQ_UPSTREAM in .env}
       UU_SNAT_MODE: ${UU_SNAT_MODE:-off}
+      UU_LOG_LEVEL: ${UU_LOG_LEVEL:-info}
     dns:
       - ${DNSMASQ_UPSTREAM:?set DNSMASQ_UPSTREAM in .env}
     volumes:

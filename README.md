@@ -48,6 +48,7 @@ cp .env.example .env
 | `UU_MAC_ADDRESS` | 为 UU 固定的、本局域网唯一的 MAC |
 | `DNSMASQ_UPSTREAM` | 容器内 dnsmasq 的上游*，通常填原主路由 |
 | `UU_SNAT_MODE` | 保持默认 `off`；仅在文末所述特殊故障下尝试 `masquerade` |
+| `UU_LOG_LEVEL` | UU 内置日志级别：`debug` / `info` / `warning` / `fatal`，默认 `info` |
 | `DOWNLOAD_PROXY` | 可选，仅供插件包和镜像构建下载；不会传给运行中的 UU |
 
 \* `DNSMASQ_UPSTREAM` 只配置本封装启动的 dnsmasq 和容器自身的 DNS。UU 开启加速后，闭源插件可能把正在加速设备的 UDP DNS 流量改写到它指定的服务器，因此该变量不能强制指定游戏主机最终使用的 DNS，也不是 UU 的自定义 DNS 配置入口。
@@ -97,6 +98,15 @@ cp .env.example .env
 docker compose ps
 docker compose logs --tail 100 uu
 ```
+
+需要详细日志时，在 `.env` 中设置 `UU_LOG_LEVEL=debug`，然后运行：
+
+```sh
+sudo ./install.sh --apply
+sudo docker compose logs --tail 100 -f uu
+```
+
+修改环境变量需要重新创建容器，仅 `docker compose restart` 不会读取新的 `.env`。日志级别控制 UU 自身日志，封装脚本和 dnsmasq 的启动／错误日志仍会显示。排障结束后可改回 `info` 并重新部署；分享 debug 日志前请检查其中的账号、设备和访问域名等信息。
 
 重启：
 

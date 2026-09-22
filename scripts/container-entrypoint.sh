@@ -16,6 +16,12 @@ is_ipv4() {
     printf '%s\n' "$1" | grep -Eq '^([0-9]{1,3}\.){3}[0-9]{1,3}$'
 }
 
+uu_log_level="${UU_LOG_LEVEL:-info}"
+case "$uu_log_level" in
+    debug|info|warning|fatal) ;;
+    *) die "UU_LOG_LEVEL must be debug, info, warning, or fatal" ;;
+esac
+
 [ "$(id -u)" -eq 0 ] || die "container must run as root with scoped capabilities"
 [ "$(uname -m)" = "x86_64" ] || die "UU package is x86_64-only"
 [ -c /dev/net/tun ] || die "/dev/net/tun is unavailable; load the host tun module first"
@@ -90,6 +96,12 @@ cp /opt/uu/uuplugin /opt/uu/xuplugin-guardian /opt/uu/uu.conf \
     /opt/uu/xtables-nft-multi /tmp/uu/
 chmod 0755 /tmp/uu/uuplugin /tmp/uu/xuplugin-guardian /tmp/uu/xtables-nft-multi
 chmod 0644 /tmp/uu/uu.conf
+
+# Only change the runtime copy; retain the audited package and version.
+[ "$(grep -c '^log_level=' /opt/uu/uu.conf)" = "1" ] \
+    || die "expected exactly one log_level in packaged uu.conf"
+sed "s/^log_level=.*/log_level=$uu_log_level/" /opt/uu/uu.conf > /tmp/uu/uu.conf
+log "UU plugin log_level=$uu_log_level; stdout/stderr are collected by Docker"
 
 dnsmasq \
     --no-daemon \
