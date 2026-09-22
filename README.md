@@ -1,4 +1,4 @@
-> 本项目由 Codex 和 GPT-5.6-Sol 完成。
+> 本项目由 Codex 和 GPT-5.6-Sol、GPT-6 Astra 完成。
 
 # 网易 UU 路由器插件 Docker 封装
 
